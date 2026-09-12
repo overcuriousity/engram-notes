@@ -12,17 +12,18 @@
   --font-text: "Inter", system-ui, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
   --radius: 6px;
+  color-scheme: light;
   --graph-note: #8a919c; --graph-line: #d3d7dd; --graph-tag: #4f9d69; --graph-attachment: #c49a2c;
 }
 :root[data-theme="dark"] {
   --bg: #1e1f22; --bg-2: #242629; --bg-3: #2c2f33; --fg: #dcdfe4; --fg-muted: #8b919a;
-  --accent: #7aa2f7; --accent-bg: #263042; --border: #35393f; --mark: #5a4b12;
+  --accent: #7aa2f7; --accent-bg: #263042; --border: #35393f; --mark: #5a4b12; color-scheme: dark;
   --graph-note: #a2a9b3; --graph-line: #3d424a; --graph-tag: #6fbf88; --graph-attachment: #d8b04a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #1e1f22; --bg-2: #242629; --bg-3: #2c2f33; --fg: #dcdfe4; --fg-muted: #8b919a;
-    --accent: #7aa2f7; --accent-bg: #263042; --border: #35393f; --mark: #5a4b12;
+    --accent: #7aa2f7; --accent-bg: #263042; --border: #35393f; --mark: #5a4b12; color-scheme: dark;
   --graph-note: #a2a9b3; --graph-line: #3d424a; --graph-tag: #6fbf88; --graph-attachment: #d8b04a;
   }
 }
@@ -142,3 +143,12 @@ input[type="checkbox"]:checked { border-color: var(--accent); background: var(--
 .base-source { flex: 1; min-height: 0; overflow: auto; }
 .yaml { height: 100%; }
 .yaml .cm-editor .cm-content { font-family: var(--font-mono); font-size: 14px; }
+/* CodeMirror's base theme gives the scroller a monospace font; notes read in the text font. */
+.cm-editor .cm-scroller { font-family: var(--font-text); }
+.yaml .cm-editor .cm-scroller { font-family: var(--font-mono); }
+/* WebKitGTK rings a button after a click; only keyboard focus is ringed. */
+button:focus:not(:focus-visible) { outline: none; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Property and cell numbers are edited as text, as in Obsidian. */
+input[type="number"] { appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
