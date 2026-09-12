@@ -1239,7 +1239,7 @@ mod tests {
             Ok(Value::List(vec![s("#project"), s("#project/sub")]))
         );
         assert_eq!(ev(r#"file.hasTag("project")"#), Ok(Value::Bool(true)));
-        assert_eq!(ev(r#"file.hasTag("#sub", "proj")"#), Ok(Value::Bool(false)));
+        assert_eq!(ev(r##"file.hasTag("#sub", "proj")"##), Ok(Value::Bool(false)));
         assert_eq!(ev(r#"file.inFolder("Projects")"#), Ok(Value::Bool(true)));
         assert_eq!(ev(r#"file.inFolder("Proj")"#), Ok(Value::Bool(false)));
         assert_eq!(ev(r#"file.hasLink("beta")"#), Ok(Value::Bool(true)));
