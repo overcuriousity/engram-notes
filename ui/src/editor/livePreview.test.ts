@@ -16,9 +16,9 @@ function stateOf(doc: string, cursor: number) {
 }
 
 // Each decoration as the text it covers and a name: widget class, CSS class, or "hide".
-function decos(doc: string, cursor = doc.length) {
+function decos(doc: string, cursor = doc.length, focused = true) {
   const out: { text: string; kind: string }[] = [];
-  buildDecorations(stateOf(doc, cursor), [{ from: 0, to: doc.length }]).between(0, doc.length, (from, to, d) => {
+  buildDecorations(stateOf(doc, cursor), [{ from: 0, to: doc.length }], focused).between(0, doc.length, (from, to, d) => {
     const spec = d.spec;
     const kind = spec.widget ? spec.widget.constructor.name : (spec.class ?? "hide");
     out.push({ text: doc.slice(from, to), kind });
@@ -30,6 +30,12 @@ describe("live preview decorations", () => {
   it("hides heading marks except on the cursor line", () => {
     expect(decos("# Title\n\ntext")).toContainEqual({ text: "# ", kind: "hide" });
     expect(decos("# Title\n\ntext", 0)).not.toContainEqual({ text: "# ", kind: "hide" });
+  });
+
+  it("reveals no source while the editor is not focused", () => {
+    expect(decos("# Title\n\ntext", 0, false)).toContainEqual({ text: "# ", kind: "hide" });
+    expect(decos("[[Note]] x", 0, false)).toContainEqual({ text: "[[Note]]", kind: "WikiWidget" });
+    expect(decos("- [ ] a\n\nz", 3, false).map((x) => x.kind)).toContain("CheckboxWidget");
   });
 
   it("draws wikilinks, showing the source on the cursor line", () => {

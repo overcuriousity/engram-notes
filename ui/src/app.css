@@ -73,9 +73,9 @@ mark { background: var(--mark); color: inherit; }
 .props { padding: 4px 12px; display: grid; grid-template-columns: minmax(60px, 35%) minmax(0, 1fr) auto; gap: 4px 8px; font-size: 13px; align-items: center; }
 .props .key { color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .props input { padding: 2px 6px; min-width: 0; width: 100%; }
-.props input[type="checkbox"] { justify-self: start; width: auto; accent-color: var(--accent); }
-.props .remove { color: var(--fg-muted); opacity: .5; }
-.props .remove:hover { opacity: 1; }
+.props input[type="checkbox"] { justify-self: start; width: 14px; padding: 0; }
+.props .remove { color: var(--fg-muted); }
+.props .remove:hover { color: var(--fg); }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; }
 .chip { display: inline-flex; align-items: center; background: var(--accent-bg); border-radius: 10px; padding: 0 2px 0 8px; font-size: 12px; }
 .chip button { color: var(--fg-muted); padding: 0 4px; }
@@ -98,3 +98,7 @@ mark { background: var(--mark); color: inherit; }
 .fileview .size { color: var(--fg-muted); font-size: 12px; }
 .fileview .external { align-self: center; padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--fg-muted); }
 .fileview .external:hover { background: var(--bg-3); color: var(--fg); }
+/* Drawn rather than native, so both themes get a readable box. */
+input[type="checkbox"] { appearance: none; width: 14px; height: 14px; padding: 0; margin: 0; border: 1.5px solid var(--fg-muted); border-radius: 3px; background: transparent; vertical-align: middle; cursor: pointer; }
+input[type="checkbox"]:hover { border-color: var(--accent); }
+input[type="checkbox"]:checked { border-color: var(--accent); background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat; }

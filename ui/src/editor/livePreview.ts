@@ -61,8 +61,13 @@ function activeLines(state: EditorState): Set<number> {
   return s;
 }
 
-export function buildDecorations(state: EditorState, ranges: readonly { from: number; to: number }[]): DecorationSet {
-  const active = activeLines(state);
+// An editor without focus reveals no source, so only the pane being typed in shows markup.
+export function buildDecorations(
+  state: EditorState,
+  ranges: readonly { from: number; to: number }[],
+  focused = true,
+): DecorationSet {
+  const active = focused ? activeLines(state) : new Set<number>();
   const marks: { from: number; to: number; deco: Decoration }[] = [];
   const push = (from: number, to: number, deco: Decoration) => marks.push({ from, to, deco });
 
@@ -91,7 +96,7 @@ export function buildDecorations(state: EditorState, ranges: readonly { from: nu
           }
         }
         if (name === "TaskMarker") {
-          const overlaps = state.selection.ranges.some((r) => r.to >= node.from && r.from <= node.to);
+          const overlaps = focused && state.selection.ranges.some((r) => r.to >= node.from && r.from <= node.to);
           if (!overlaps) {
             const checked = state.sliceDoc(node.from + 1, node.from + 2).toLowerCase() === "x";
             push(node.from, node.to, Decoration.replace({ widget: new CheckboxWidget(checked, node.from) }));
@@ -181,9 +186,11 @@ export function livePreview(opts: { onFollow: (target: string) => void }) {
   const plugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
-      constructor(view: EditorView) { this.decorations = buildDecorations(view.state, view.visibleRanges); }
+      constructor(view: EditorView) { this.decorations = buildDecorations(view.state, view.visibleRanges, view.hasFocus); }
       update(u: ViewUpdate) {
-        if (u.docChanged || u.viewportChanged || u.selectionSet) this.decorations = buildDecorations(u.view.state, u.view.visibleRanges);
+        if (u.docChanged || u.viewportChanged || u.selectionSet || u.focusChanged) {
+          this.decorations = buildDecorations(u.view.state, u.view.visibleRanges, u.view.hasFocus);
+        }
       }
     },
     { decorations: (v) => v.decorations },

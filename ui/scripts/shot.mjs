@@ -96,6 +96,8 @@ listeners.push((m) => {
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", { width: Number(width), height: Number(height), deviceScaleFactor: 1, mobile: false });
+// Headless pages are never focused otherwise, and editors react to focus.
+await send("Emulation.setFocusEmulationEnabled", { enabled: true });
 await send("Page.addScriptToEvaluateOnNewDocument", { source: mock });
 const loaded = new Promise((r) => listeners.push((m) => m.method === "Page.loadEventFired" && r()));
 await send("Page.navigate", { url: URL_ });
