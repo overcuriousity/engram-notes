@@ -1,23 +1,28 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { app, type Tab } from "../lib/state.svelte";
+  import { app } from "../lib/state.svelte";
+  import { findPane } from "../lib/layout";
   import { resolveLink, createNote, tags as apiTags, errorMessage } from "../lib/api";
   import Editor from "./Editor.svelte";
   import Reading from "./Reading.svelte";
 
-  let { path }: { path: string } = $props();
+  let { paneId, path }: { paneId: number; path: string } = $props();
   // Read from the store so edits mutate state the store owns.
-  const tab = $derived(app.tabs.find((t) => t.path === path) as Tab);
+  const doc = $derived(app.docs[path]);
+  const mode = $derived(findPane(app.layout, paneId)?.tabs.find((t) => t.path === path)?.mode ?? "live");
   let timer: ReturnType<typeof setTimeout> | undefined;
   let tagList = $state<string[]>([]);
   onMount(async () => {
     tagList = (await apiTags()).map((t) => t.tag);
   });
 
+  // A second pane's editor echoes the change it was given; equal text is not an edit.
   function onChange(text: string) {
-    tab.text = text;
+    if (text === doc.text) return;
+    doc.text = text;
     clearTimeout(timer);
-    timer = setTimeout(() => app.save(tab), 500);
+    const d = doc;
+    timer = setTimeout(() => app.save(d), 500);
   }
 
   async function follow(target: string) {
@@ -36,7 +41,7 @@
   }
 
   function toggleTask(line: number) {
-    const lines = tab.text.split("\n");
+    const lines = doc.text.split("\n");
     if (line < 0 || line >= lines.length) return;
     lines[line] = lines[line].replace(/^(\s*[-*+]\s+)\[( |x|X)\]/, (_, p, c) => `${p}[${c === " " ? "x" : " "}]`);
     onChange(lines.join("\n"));
@@ -45,30 +50,33 @@
   const modes = ["live", "source", "reading"] as const;
 </script>
 
-{#if tab.conflict}
-  <div class="conflict">
-    This file changed on disk while you had unsaved edits.
-    <button onclick={() => app.resolveConflict(tab, false)}>Reload from disk</button>
-    <button onclick={() => app.resolveConflict(tab, true)}>Keep mine</button>
+{#if doc}
+  {#if doc.conflict}
+    <div class="conflict">
+      This file changed on disk while you had unsaved edits.
+      <button onclick={() => app.resolveConflict(doc, false)}>Reload from disk</button>
+      <button onclick={() => app.resolveConflict(doc, true)}>Keep mine</button>
+    </div>
+  {/if}
+  <div class="modes">
+    {#each modes as m (m)}
+      <button class:active={mode === m} onclick={() => app.setMode(paneId, path, m)}>{m}</button>
+    {/each}
+  </div>
+  <div class="note">
+    {#if mode === "reading"}
+      <Reading text={doc.text} onFollow={follow} onToggleTask={toggleTask} />
+    {:else}
+      <Editor
+        text={doc.text}
+        {mode}
+        focus={app.activePane === paneId}
+        onchange={onChange}
+        onblur={() => app.save(doc)}
+        onFollow={follow}
+        titles={() => app.titles}
+        tags={() => tagList}
+      />
+    {/if}
   </div>
 {/if}
-<div class="modes">
-  {#each modes as m (m)}
-    <button class:active={tab.mode === m} onclick={() => (tab.mode = m)}>{m}</button>
-  {/each}
-</div>
-<div class="note">
-  {#if tab.mode === "reading"}
-    <Reading text={tab.text} onFollow={follow} onToggleTask={toggleTask} />
-  {:else}
-    <Editor
-      text={tab.text}
-      mode={tab.mode}
-      onchange={onChange}
-      onblur={() => app.save(tab)}
-      onFollow={follow}
-      titles={() => app.titles}
-      tags={() => tagList}
-    />
-  {/if}
-</div>

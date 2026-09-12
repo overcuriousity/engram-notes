@@ -20,11 +20,11 @@
     return v;
   }
   async function commit(key: string, raw: string) {
-    const tab = app.activeTab;
-    if (!tab) return;
+    const doc = app.activeDoc;
+    if (!doc) return;
     try {
-      await app.save(tab); // a dirty buffer would otherwise conflict with the rewrite
-      await setProperty(tab.path, key, parse(raw));
+      await app.save(doc); // a dirty buffer would otherwise conflict with the rewrite
+      await setProperty(doc.path, key, parse(raw));
     } catch (e) {
       app.say(errorMessage(e));
     }

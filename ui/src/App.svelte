@@ -5,8 +5,7 @@
   import VaultPicker from "./components/VaultPicker.svelte";
   import Explorer from "./components/Explorer.svelte";
   import Search from "./components/Search.svelte";
-  import Tabs from "./components/Tabs.svelte";
-  import NoteView from "./components/NoteView.svelte";
+  import Workspace from "./components/Workspace.svelte";
   import Backlinks from "./components/Backlinks.svelte";
   import Outgoing from "./components/Outgoing.svelte";
   import Properties from "./components/Properties.svelte";
@@ -47,12 +46,7 @@
       {/if}
     </aside>
     <main class="centre">
-      <Tabs />
-      {#if app.activeTab}
-        {#key app.activeTab.path}<NoteView path={app.activeTab.path} />{/key}
-      {:else}
-        <div class="note" style="display:grid;place-items:center;color:var(--fg-muted)">No note open</div>
-      {/if}
+      <Workspace node={app.layout} />
     </main>
     <aside class="sidebar right">
       {#if app.showRight}<Backlinks /><Outgoing /><Properties />{/if}

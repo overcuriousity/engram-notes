@@ -18,12 +18,14 @@ export const defaults: Command[] = [
   { id: "search", name: "Search in all files", hotkey: "Ctrl+Shift+F", run: () => { app.leftPane = "search"; app.showLeft = true; } },
   { id: "new-note", name: "New note", hotkey: "Ctrl+N", run: () => newNote() },
   { id: "daily", name: "Open today's daily note", hotkey: "Ctrl+D", run: async () => { const p = await dailyNote(); await app.refresh(); await app.openNote(p); } },
-  { id: "close-tab", name: "Close current tab", hotkey: "Ctrl+W", run: () => { if (app.active >= 0) app.closeTab(app.active); } },
-  { id: "toggle-mode", name: "Toggle live preview / source", hotkey: "Ctrl+E", run: () => { const t = app.activeTab; if (t) t.mode = t.mode === "source" ? "live" : "source"; } },
-  { id: "toggle-reading", name: "Toggle reading view", hotkey: "Ctrl+Shift+E", run: () => { const t = app.activeTab; if (t) t.mode = t.mode === "reading" ? "live" : "reading"; } },
+  { id: "close-tab", name: "Close current tab", hotkey: "Ctrl+W", run: () => { const p = app.pane; if (p.active >= 0) app.closeTab(p.id, p.active); } },
+  { id: "toggle-mode", name: "Toggle live preview / source", hotkey: "Ctrl+E", run: () => { const t = app.activeTab; if (t) app.setMode(app.pane.id, t.path, t.mode === "source" ? "live" : "source"); } },
+  { id: "toggle-reading", name: "Toggle reading view", hotkey: "Ctrl+Shift+E", run: () => { const t = app.activeTab; if (t) app.setMode(app.pane.id, t.path, t.mode === "reading" ? "live" : "reading"); } },
+  { id: "split-right", name: "Split right", hotkey: "", run: () => app.split("row") },
+  { id: "split-down", name: "Split down", hotkey: "", run: () => app.split("column") },
   { id: "toggle-left", name: "Toggle left sidebar", hotkey: "Ctrl+Shift+L", run: () => (app.showLeft = !app.showLeft) },
   { id: "toggle-right", name: "Toggle right sidebar", hotkey: "Ctrl+Shift+R", run: () => (app.showRight = !app.showRight) },
-  { id: "save", name: "Save", hotkey: "Ctrl+S", run: () => { const t = app.activeTab; if (t) return app.save(t); } },
+  { id: "save", name: "Save", hotkey: "Ctrl+S", run: () => { const d = app.activeDoc; if (d) return app.save(d); } },
 ];
 
 export function allCommands(): Command[] {

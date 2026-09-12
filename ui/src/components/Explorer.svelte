@@ -50,8 +50,7 @@
         (await ask(`Update links in ${plan.affected.length} file(s)?\n\n${plan.affected.join("\n")}`, { title: "Rename", kind: "info" }));
       if (!ok) return;
       await applyRename(plan);
-      const tab = app.tabs.find((t) => t.path === path);
-      if (tab) tab.path = plan.to;
+      app.renamed(path, plan.to);
       await app.refresh();
     } catch (e) {
       app.say(errorMessage(e));
@@ -62,8 +61,7 @@
     if (!(await confirm(`Move "${path}" to the trash?`, { title: "Delete", kind: "warning" }))) return;
     try {
       await deleteFile(path);
-      const i = app.tabs.findIndex((t) => t.path === path);
-      if (i >= 0) app.closeTab(i);
+      app.forget(path);
       await app.refresh();
     } catch (e) {
       app.say(errorMessage(e));

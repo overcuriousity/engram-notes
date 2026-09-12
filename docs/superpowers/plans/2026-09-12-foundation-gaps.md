@@ -1482,7 +1482,7 @@ export const app = new AppStateStore();
   { id: "save", name: "Save", hotkey: "Ctrl+S", run: () => { const d = app.activeDoc; if (d) return app.save(d); } },
 ```
 
-`ui/src/components/Palette.svelte`: the command items become `{ label: c.name, detail: c.hotkey || c.id, run: c.run }`, since the list is keyed by `detail` and the split commands have no hotkey.
+`ui/src/components/Palette.svelte`: key the `{#each}` by `it.label + it.detail`, since the split commands have no hotkey and an empty detail would repeat.
 
 `ui/src/components/Explorer.svelte`: in `rename`, replace the two `tab` lines with `app.renamed(path, plan.to);`; in `remove`, replace the two `closeTab` lines with `app.forget(path);`.
 
@@ -2196,7 +2196,7 @@ Replace `score` and the `items` derivation:
 
   const items = $derived.by((): Item[] => {
     if (app.palette === "commands") {
-      return matchCommands(allCommands(), q).map((c) => ({ label: c.name, detail: c.hotkey || c.id, run: c.run }));
+      return matchCommands(allCommands(), q).map((c) => ({ label: c.name, detail: c.hotkey, run: c.run }));
     }
     const matches = matchNotes(app.titles, q);
     const notes: Item[] = matches.map((m) => ({ label: m.title, detail: m.path, run: () => app.openNote(m.path) }));
@@ -2216,7 +2216,7 @@ Replace `score` and the `items` derivation:
   });
 ```
 
-The command detail falls back to the id because the `{#each}` is keyed by `detail`, and the split commands have no hotkey.
+The `{#each}` stays keyed by `it.label + it.detail` (Task 6).
 
 - [ ] **Step 5: Check**
 

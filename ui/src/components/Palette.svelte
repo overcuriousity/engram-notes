@@ -74,7 +74,7 @@
     <div class="palette" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" onkeydown={() => {}}>
       <input bind:this={input} bind:value={q} onkeydown={onKey} placeholder={app.palette === "files" ? "Open note…" : "Run command…"} />
       <div class="items">
-        {#each items as it, i (it.detail)}
+        {#each items as it, i (it.label + it.detail)}
           <button class:active={i === sel} onclick={() => choose(i)}><span>{it.label}</span><span class="detail">{it.detail}</span></button>
         {/each}
       </div>
