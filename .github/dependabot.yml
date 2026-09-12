@@ -1,0 +1,57 @@
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+      # Majors stay separate: for tauri, rusqlite and fastembed a major bump
+      # is real API work, not a version edit.
+      major:
+        update-types:
+          - major
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /ui
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      patch-and-minor:
+        update-types:
+          - patch
+          - minor
+      major:
+        update-types:
+          - major
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns:
+          - "*"
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "chore(ci)"

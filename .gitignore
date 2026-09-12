@@ -1,0 +1,14 @@
+/target
+/core/target
+/src-tauri/target
+/src-tauri/gen/schemas
+node_modules/
+/ui/dist
+/ui/.svelte-kit
+*.db
+*.db-wal
+*.db-shm
+
+# The agent's own workspace: worktrees, ledgers, session notes. Never the record.
+/.claude/
+/.superpowers/
