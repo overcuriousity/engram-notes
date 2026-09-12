@@ -14,6 +14,9 @@ pub struct VaultInfo {
     pub root: String,
     pub config: AppConfig,
     pub stats: RebuildStats,
+    pub index_recreated: bool,
+    /// Why the watcher could not start; `None` while it runs.
+    pub watch_error: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -71,15 +74,18 @@ pub fn startup_vault() -> Option<String> {
 #[tauri::command]
 pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdResult<VaultInfo> {
     let vault = Vault::open(&path)?;
-    let mut index = Index::open(&config::index_path(&vault)?)?;
+    let (mut index, index_recreated) = Index::open_or_recreate(&config::index_path(&vault)?)?;
     let stats = index.rebuild(&vault)?;
     let cfg = config::load_config(&vault)?;
     let root = vault.root().to_string_lossy().into_owned();
     remember(&root);
 
     let handle = app.clone();
-    let watcher =
-        engram_core::watch::watch(&vault, move |changes| apply_changes(&handle, changes)).ok();
+    let (watcher, watch_error) =
+        match engram_core::watch::watch(&vault, move |ev| on_watch(&handle, ev)) {
+            Ok(w) => (Some(w), None),
+            Err(e) => (None, Some(e.to_string())),
+        };
 
     *state.open.lock().unwrap() = Some(Open {
         vault,
@@ -91,7 +97,34 @@ pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdRe
         root,
         config: cfg,
         stats,
+        index_recreated,
+        watch_error,
     })
+}
+
+// Runs on the watcher thread. After a failure the UI rescans on focus.
+fn on_watch(app: &AppHandle, event: Result<Vec<Change>, String>) {
+    match event {
+        Ok(changes) => apply_changes(app, changes),
+        Err(message) => {
+            let _ = app.emit("watch-failed", message);
+        }
+    }
+}
+
+/// Catches up with edits a failed watcher missed.
+#[tauri::command]
+pub fn rescan(state: State<AppState>) -> CmdResult<RebuildStats> {
+    with_open(&state, |o| Ok(o.index.rebuild(&o.vault)?))
+}
+
+#[tauri::command]
+pub fn anchor_line(
+    state: State<AppState>,
+    path: String,
+    fragment: String,
+) -> CmdResult<Option<u32>> {
+    with_open(&state, |o| Ok(o.index.anchor_line(&path, &fragment)?))
 }
 
 // Runs on the watcher thread: re-index what changed, then tell the window.
@@ -290,4 +323,85 @@ pub fn daily_note(state: State<AppState>) -> CmdResult<String> {
         }
         Ok(path)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // Each shape is what `ui/src/lib/api.ts` declares.
+    #[test]
+    fn vault_info() {
+        let info = VaultInfo {
+            root: "/v".into(),
+            config: AppConfig::default(),
+            stats: RebuildStats {
+                added: 1,
+                ..Default::default()
+            },
+            index_recreated: true,
+            watch_error: None,
+        };
+        let v = serde_json::to_value(&info).unwrap();
+        assert_eq!(v["root"], "/v");
+        assert_eq!(v["config"]["editor"]["default_mode"], "live");
+        assert_eq!(v["config"]["daily_notes"]["template"], json!(null));
+        assert_eq!(
+            v["stats"],
+            json!({"added": 1, "updated": 0, "removed": 0, "unchanged": 0})
+        );
+        assert_eq!(v["index_recreated"], true);
+        assert_eq!(v["watch_error"], json!(null));
+    }
+
+    #[test]
+    fn errors_changes_notes_and_links() {
+        let e = CommandError::from(engram_core::Error::NotFound("x.md".into()));
+        assert_eq!(
+            serde_json::to_value(&e).unwrap(),
+            json!({"code": "not_found", "message": "not found: x.md"})
+        );
+        let c = Change {
+            path: "a.md".into(),
+            kind: ChangeKind::Removed,
+        };
+        assert_eq!(
+            serde_json::to_value(&c).unwrap(),
+            json!({"path": "a.md", "kind": "removed"})
+        );
+        let n = NoteText {
+            path: "a.md".into(),
+            text: "t".into(),
+            mtime_ms: 5,
+        };
+        assert_eq!(
+            serde_json::to_value(&n).unwrap(),
+            json!({"path": "a.md", "text": "t", "mtime_ms": 5})
+        );
+        let row = LinkRow {
+            src_path: "a.md".into(),
+            target_raw: "B".into(),
+            target_path: None,
+            kind: "wiki".into(),
+            heading: None,
+            block: Some("x".into()),
+            alias: None,
+            line: 3,
+            context: "c".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&row).unwrap(),
+            json!({"src_path": "a.md", "target_raw": "B", "target_path": null, "kind": "wiki",
+                   "heading": null, "block": "x", "alias": null, "line": 3, "context": "c"})
+        );
+    }
+
+    #[test]
+    fn rename_plan_from_the_ui() {
+        let p: RenamePlan =
+            serde_json::from_value(json!({"from": "a.md", "to": "b.md", "affected": ["c.md"]}))
+                .unwrap();
+        assert_eq!(p.affected, vec!["c.md"]);
+    }
 }

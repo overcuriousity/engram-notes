@@ -1,3 +1,4 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./api";
 
 export interface Tab {
@@ -21,6 +22,7 @@ class AppStateStore {
   showRight = $state(true);
   palette = $state<"none" | "files" | "commands">("none");
   leftPane = $state<"files" | "search">("files");
+  watching = $state(true);
 
   get activeTab(): Tab | null {
     return this.active >= 0 ? this.tabs[this.active] : null;
@@ -30,6 +32,9 @@ class AppStateStore {
     const info = await api.openVault(root);
     this.root = info.root;
     this.config = info.config;
+    if (info.index_recreated) this.say("The index was damaged and has been rebuilt.");
+    this.watching = info.watch_error === null;
+    if (info.watch_error) this.say(`File watching is off: ${info.watch_error}. Changes are read when the window gains focus.`);
     await this.refresh();
     const ws = await api.getWorkspace();
     const open = (ws.tabs as string[] | undefined) ?? [];
@@ -39,6 +44,26 @@ class AppStateStore {
     this.active = this.tabs.length ? Math.max(0, Math.min(Number(ws.active ?? 0), this.tabs.length - 1)) : -1;
     await api.onIndexChanged(() => this.refresh());
     await api.onFileChanged((c) => this.externalChange(c));
+    await api.onWatchFailed((msg) => {
+      if (this.watching) this.say(`File watching stopped: ${msg}. Changes are read when the window gains focus.`);
+      this.watching = false;
+    });
+    await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused && !this.watching) this.rescan().catch((e) => this.say(api.errorMessage(e)));
+    });
+  }
+
+  // Without a watcher, gaining focus is when outside edits are picked up.
+  async rescan() {
+    await api.rescan();
+    await this.refresh();
+    for (const t of [...this.tabs]) {
+      try {
+        await this.externalChange({ path: t.path, kind: "changed" });
+      } catch {
+        await this.externalChange({ path: t.path, kind: "removed" });
+      }
+    }
   }
 
   async refresh() {

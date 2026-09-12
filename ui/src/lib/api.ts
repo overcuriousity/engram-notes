@@ -9,11 +9,11 @@ export interface AppConfig {
   hotkeys: Record<string, string>;
   theme: "system" | "light" | "dark";
 }
-export interface VaultInfo { root: string; config: AppConfig; stats: RebuildStats }
+export interface VaultInfo { root: string; config: AppConfig; stats: RebuildStats; index_recreated: boolean; watch_error: string | null }
 export interface NoteText { path: string; text: string; mtime_ms: number }
 export interface LinkRow {
   src_path: string; target_raw: string; target_path: string | null; kind: string;
-  heading: string | null; alias: string | null; line: number; context: string;
+  heading: string | null; block: string | null; alias: string | null; line: number; context: string;
 }
 export interface Unresolved { target: string; count: number }
 export interface TagCount { tag: string; count: number }
@@ -47,11 +47,15 @@ export const setConfig = (config: AppConfig) => invoke<void>("set_config", { con
 export const getWorkspace = () => invoke<Record<string, unknown>>("get_workspace");
 export const setWorkspace = (workspace: Record<string, unknown>) => invoke<void>("set_workspace", { workspace });
 export const dailyNote = () => invoke<string>("daily_note");
+export const rescan = () => invoke<RebuildStats>("rescan");
+export const anchorLine = (path: string, fragment: string) => invoke<number | null>("anchor_line", { path, fragment });
 
 export const onIndexChanged = (f: (c: Change[]) => void): Promise<UnlistenFn> =>
   listen<Change[]>("index-changed", (e) => f(e.payload));
 export const onFileChanged = (f: (c: Change) => void): Promise<UnlistenFn> =>
   listen<Change>("file-changed", (e) => f(e.payload));
+export const onWatchFailed = (f: (message: string) => void): Promise<UnlistenFn> =>
+  listen<string>("watch-failed", (e) => f(e.payload));
 
 export function errorMessage(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) return String((e as CommandError).message);

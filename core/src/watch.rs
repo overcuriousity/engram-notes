@@ -38,14 +38,24 @@ fn io_err(root: &Path, e: notify::Error) -> Error {
     Error::io(root, std::io::Error::other(e))
 }
 
-pub fn watch(vault: &Vault, on_change: impl Fn(Vec<Change>) + Send + 'static) -> Result<Watcher> {
+pub fn watch(
+    vault: &Vault,
+    on_event: impl Fn(std::result::Result<Vec<Change>, String>) + Send + 'static,
+) -> Result<Watcher> {
     let root: PathBuf = vault.root().to_path_buf();
     let handler_root = root.clone();
     let mut debouncer = new_debouncer(
         Duration::from_millis(300),
         None,
         move |res: DebounceEventResult| {
-            let Ok(events) = res else { return };
+            let events = match res {
+                Ok(events) => events,
+                Err(errors) => {
+                    let msg: Vec<String> = errors.iter().map(|e| e.to_string()).collect();
+                    on_event(Err(msg.join("; ")));
+                    return;
+                }
+            };
             let mut out: Vec<Change> = Vec::new();
             for ev in events {
                 let kind = if ev.kind.is_remove() {
@@ -69,7 +79,7 @@ pub fn watch(vault: &Vault, on_change: impl Fn(Vec<Change>) + Send + 'static) ->
                 }
             }
             if !out.is_empty() {
-                on_change(out);
+                on_event(Ok(out));
             }
         },
     )
@@ -94,7 +104,10 @@ mod tests {
         let v = Vault::open(d.path()).unwrap();
         let seen: Arc<Mutex<Vec<Change>>> = Arc::default();
         let sink = seen.clone();
-        let _w = watch(&v, move |c| sink.lock().unwrap().extend(c)).unwrap();
+        let _w = watch(&v, move |c| {
+            sink.lock().unwrap().extend(c.unwrap_or_default())
+        })
+        .unwrap();
         std::thread::sleep(Duration::from_millis(200));
         std::fs::write(d.path().join("n.md"), "x").unwrap();
         std::fs::write(d.path().join(".engram-notes/app.json"), "{}").unwrap();

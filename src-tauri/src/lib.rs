@@ -33,6 +33,8 @@ pub fn run() {
             commands::get_workspace,
             commands::set_workspace,
             commands::daily_note,
+            commands::rescan,
+            commands::anchor_line,
         ])
         .run(tauri::generate_context!())
         .expect("error while running engram-notes");
