@@ -65,7 +65,7 @@ src-tauri/src/main.rs
 src-tauri/src/lib.rs            run(): builder, state, watcher thread
 src-tauri/src/state.rs          AppState = Mutex<Option<Open>>; Open { vault, index, config }
 src-tauri/src/commands.rs       all #[tauri::command] fns
-src-tauri/src/error.rs          core::Error -> CommandError {code, message}
+src-tauri/src/error.rs          engram_core::Error -> CommandError {code, message}
 ui/package.json
 ui/vite.config.ts
 ui/tsconfig.json
@@ -106,7 +106,7 @@ docs/smoke.md                   manual checklist
 - Create: `Cargo.toml`, `rust-toolchain.toml`, `rustfmt.toml`, `core/Cargo.toml`, `core/src/lib.rs`, `core/src/error.rs`, `.github/workflows/ci.yml`
 
 **Interfaces:**
-- Produces: `core::Error` enum, `core::Result<T>`.
+- Produces: `engram_core::Error` enum, `core::Result<T>`.
 
 - [ ] **Step 1: Workspace manifest**
 
@@ -2478,7 +2478,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-core = { package = "engram-notes-core", path = "../core" }
+engram_core = { package = "engram-notes-core", path = "../core" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
@@ -2550,10 +2550,10 @@ cd ui && pnpm dlx @tauri-apps/cli@2 icon ../assets/icon.svg -o ../src-tauri/icon
 `src-tauri/src/state.rs`:
 
 ```rust
-use core::config::AppConfig;
-use core::index::Index;
-use core::vault::Vault;
-use core::watch::Watcher;
+use engram_core::config::AppConfig;
+use engram_core::index::Index;
+use engram_core::vault::Vault;
+use engram_core::watch::Watcher;
 use std::sync::Mutex;
 
 pub struct Open {
@@ -2578,15 +2578,15 @@ pub struct CommandError {
     pub message: String,
 }
 
-impl From<core::Error> for CommandError {
-    fn from(e: core::Error) -> Self {
+impl From<engram_core::Error> for CommandError {
+    fn from(e: engram_core::Error) -> Self {
         let code = match &e {
-            core::Error::Io { .. } => "io",
-            core::Error::Parse { .. } => "parse",
-            core::Error::Index(_) => "index",
-            core::Error::Config(_) => "config",
-            core::Error::NotFound(_) => "not_found",
-            core::Error::Exists(_) => "exists",
+            engram_core::Error::Io { .. } => "io",
+            engram_core::Error::Parse { .. } => "parse",
+            engram_core::Error::Index(_) => "index",
+            engram_core::Error::Config(_) => "config",
+            engram_core::Error::NotFound(_) => "not_found",
+            engram_core::Error::Exists(_) => "exists",
         };
         CommandError { code, message: e.to_string() }
     }
@@ -2608,13 +2608,13 @@ pub type CmdResult<T> = Result<T, CommandError>;
 ```rust
 use crate::error::{CmdResult, CommandError};
 use crate::state::{AppState, Open};
-use core::config::{self, AppConfig};
-use core::index::fts::FtsHit;
-use core::index::query::{LinkRow, TagCount, Unresolved};
-use core::index::{Index, RebuildStats};
-use core::rename::RenamePlan;
-use core::vault::{FileEntry, Vault};
-use core::watch::{Change, ChangeKind};
+use engram_core::config::{self, AppConfig};
+use engram_core::index::fts::FtsHit;
+use engram_core::index::query::{LinkRow, TagCount, Unresolved};
+use engram_core::index::{Index, RebuildStats};
+use engram_engram_core::rename::RenamePlan;
+use engram_core::vault::{FileEntry, Vault};
+use engram_core::watch::{Change, ChangeKind};
 use std::sync::MutexGuard;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -2670,7 +2670,7 @@ pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdRe
     remember(&root);
 
     let handle = app.clone();
-    let watcher = core::watch::watch(&vault, move |changes| apply_changes(&handle, changes)).ok();
+    let watcher = engram_core::watch::watch(&vault, move |changes| apply_changes(&handle, changes)).ok();
 
     *state.open.lock().unwrap() = Some(Open { vault, index, config: cfg.clone(), watcher });
     Ok(VaultInfo { root, config: cfg, stats })
@@ -2727,7 +2727,7 @@ pub fn create_note(state: State<AppState>, path: String, text: String) -> CmdRes
 pub fn create_folder(state: State<AppState>, path: String) -> CmdResult<()> {
     with_open(&state, |o| {
         let abs = o.vault.abs(&path);
-        std::fs::create_dir_all(&abs).map_err(|e| core::Error::io(abs, e))?;
+        std::fs::create_dir_all(&abs).map_err(|e| engram_core::Error::io(abs, e))?;
         Ok(())
     })
 }
@@ -2743,12 +2743,12 @@ pub fn delete_file(state: State<AppState>, path: String) -> CmdResult<()> {
 
 #[tauri::command]
 pub fn plan_rename(state: State<AppState>, from: String, to: String) -> CmdResult<RenamePlan> {
-    with_open(&state, |o| Ok(core::rename::plan_rename(&o.index, &from, &to)?))
+    with_open(&state, |o| Ok(engram_core::rename::plan_rename(&o.index, &from, &to)?))
 }
 
 #[tauri::command]
 pub fn apply_rename(state: State<AppState>, plan: RenamePlan) -> CmdResult<()> {
-    with_open(&state, |o| Ok(core::rename::apply_rename(&o.vault, &mut o.index, &plan)?))
+    with_open(&state, |o| Ok(engram_core::rename::apply_rename(&o.vault, &mut o.index, &plan)?))
 }
 
 #[tauri::command]
@@ -2790,7 +2790,7 @@ pub fn properties(state: State<AppState>, path: String) -> CmdResult<serde_json:
 pub fn set_property(state: State<AppState>, path: String, key: String, value: serde_json::Value) -> CmdResult<()> {
     with_open(&state, |o| {
         let text = o.vault.read(&path)?;
-        let out = core::frontmatter::set_property(&text, &key, value);
+        let out = engram_core::frontmatter::set_property(&text, &key, value);
         o.vault.write(&path, &out)?;
         o.index.update_file(&o.vault, &path)?;
         Ok(())
