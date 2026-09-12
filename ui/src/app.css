@@ -70,10 +70,10 @@ mark { background: var(--mark); color: inherit; }
 .linkrow:hover { background: var(--bg-3); }
 .linkrow .src { font-weight: 500; }
 .linkrow .ctx { color: var(--fg-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.props { padding: 4px 12px; display: grid; grid-template-columns: minmax(60px, max-content) 1fr auto; gap: 4px 8px; font-size: 13px; align-items: center; }
+.props { padding: 4px 12px; display: grid; grid-template-columns: minmax(60px, 35%) minmax(0, 1fr) auto; gap: 4px 8px; font-size: 13px; align-items: center; }
 .props .key { color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.props input { padding: 2px 6px; min-width: 0; }
-.props input[type="checkbox"] { justify-self: start; accent-color: var(--accent); }
+.props input { padding: 2px 6px; min-width: 0; width: 100%; }
+.props input[type="checkbox"] { justify-self: start; width: auto; accent-color: var(--accent); }
 .props .remove { color: var(--fg-muted); opacity: .5; }
 .props .remove:hover { opacity: 1; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; }
