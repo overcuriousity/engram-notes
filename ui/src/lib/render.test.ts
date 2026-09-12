@@ -19,6 +19,12 @@ describe("renderMarkdown", () => {
     expect(h).toContain('data-title="Careful"');
     expect(h).not.toContain("[!warning]");
   });
+  it("hides frontmatter and keeps task line numbers", () => {
+    const h = renderMarkdown("---\ntitle: T\ntags: [a]\n---\n- [ ] task");
+    expect(h).not.toContain("title");
+    expect(h).not.toContain("<hr>");
+    expect(h).toContain('<input type="checkbox" data-line="4">');
+  });
   it("escapes html", () => {
     expect(renderMarkdown("<script>x</script>")).not.toContain("<script>");
   });

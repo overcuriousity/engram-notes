@@ -83,6 +83,13 @@ md.core.ruler.before("inline", "callouts", (state) => {
   }
 });
 
+// Frontmatter lines become blank lines, so rendered task lines keep their
+// source line numbers.
+function blankFrontmatter(text: string): string {
+  const m = /^---\r?\n[\s\S]*?\r?\n---(?=\r?\n|$)/.exec(text);
+  return m ? m[0].replace(/[^\n]/g, "") + text.slice(m[0].length) : text;
+}
+
 export function renderMarkdown(text: string): string {
-  return md.render(text);
+  return md.render(blankFrontmatter(text));
 }
