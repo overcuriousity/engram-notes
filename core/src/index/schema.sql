@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS links (
 );
 CREATE INDEX IF NOT EXISTS links_src ON links(src_path);
 CREATE INDEX IF NOT EXISTS links_target ON links(target_path);
+-- resolve_all updates by raw target once per distinct target.
+CREATE INDEX IF NOT EXISTS links_target_raw ON links(target_raw);
 
 CREATE TABLE IF NOT EXISTS tags (
   path TEXT NOT NULL REFERENCES notes(path) ON DELETE CASCADE,

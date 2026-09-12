@@ -75,7 +75,10 @@ impl Index {
             stats.removed += 1;
         }
         tx.commit()?;
-        self.resolve_all()?;
+        // Nothing added, changed or removed leaves every resolution valid.
+        if stats.added + stats.updated + stats.removed > 0 {
+            self.resolve_all()?;
+        }
         Ok(stats)
     }
 
