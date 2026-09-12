@@ -86,13 +86,21 @@ export function closeTab(root: Node, paneId: number, index: number): Node {
 
 export function withoutPath(root: Node, path: string): Node {
   const emptied = panes(root)
-    .filter((p) => p.tabs.length > 0 && p.tabs.every((t) => t.path === path))
+    .filter((p) => p.tabs.length > 0 && p.tabs.every((t) => under(t.path, path)))
     .map((p) => p.id);
-  let out = mapPanes(root, (p) => keepTabs(p, (t) => t.path !== path));
+  let out = mapPanes(root, (p) => keepTabs(p, (t) => !under(t.path, path)));
   for (const id of emptied) if (panes(out).length > 1) out = removePane(out, id);
   return out;
 }
 
+/** `path` is `dir` itself or lies below it. */
+export function under(path: string, dir: string): boolean {
+  return path === dir || path.startsWith(`${dir}/`);
+}
+
 export function renamePath(root: Node, from: string, to: string): Node {
-  return mapPanes(root, (p) => ({ ...p, tabs: p.tabs.map((t) => (t.path === from ? { ...t, path: to } : t)) }));
+  return mapPanes(root, (p) => ({
+    ...p,
+    tabs: p.tabs.map((t) => (under(t.path, from) ? { ...t, path: to + t.path.slice(from.length) } : t)),
+  }));
 }

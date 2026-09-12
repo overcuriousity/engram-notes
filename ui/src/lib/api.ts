@@ -21,6 +21,13 @@ export interface FtsHit { path: string; title: string; snippet: string; score: n
 export interface RenamePlan { from: string; to: string; affected: string[] }
 export interface Change { path: string; kind: "changed" | "removed" }
 export interface CommandError { code: string; message: string }
+export interface GraphNode { id: string; title: string; kind: "note" | "attachment" | "unresolved"; tags: string[] }
+export interface GraphEdge { source: string; target: string }
+export interface Graph { nodes: GraphNode[]; edges: GraphEdge[] }
+export interface SortKey { property: string; direction: "ASC" | "DESC" }
+export interface Column { id: string; label: string; editable: boolean }
+export interface BaseRow { path: string; cells: unknown[] }
+export interface BaseTable { views: string[]; view: number; columns: Column[]; rows: BaseRow[]; sort: SortKey[]; errors: string[] }
 
 export const recentVaults = () => invoke<string[]>("recent_vaults");
 export const startupVault = () => invoke<string | null>("startup_vault");
@@ -51,6 +58,12 @@ export const rescan = () => invoke<RebuildStats>("rescan");
 export const attachmentPath = (path: string) => invoke<string>("attachment_path", { path });
 export const openExternal = (path: string) => invoke<void>("open_external", { path });
 export const anchorLine = (path: string, fragment: string) => invoke<number | null>("anchor_line", { path, fragment });
+export const listFolders = () => invoke<string[]>("list_folders");
+export const graph = () => invoke<Graph>("graph");
+export const getGraphConfig = () => invoke<Record<string, unknown>>("get_graph_config");
+export const setGraphConfig = (config: Record<string, unknown>) => invoke<void>("set_graph_config", { config });
+export const runBase = (path: string, view: number) => invoke<BaseTable>("run_base", { path, view });
+export const setBaseSort = (path: string, view: number, sort: SortKey[]) => invoke<void>("set_base_sort", { path, view, sort });
 
 export const onIndexChanged = (f: (c: Change[]) => void): Promise<UnlistenFn> =>
   listen<Change[]>("index-changed", (e) => f(e.payload));

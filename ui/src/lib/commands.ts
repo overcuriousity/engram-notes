@@ -1,13 +1,22 @@
 import { app } from "./state.svelte";
 import { dailyNote, createNote } from "./api";
+import { freeName } from "./tree";
 
 export interface Command { id: string; name: string; hotkey: string; run: () => void | Promise<void> }
 
+// What Obsidian writes into a new base.
+export const NEW_BASE = "views:\n  - type: table\n    name: Table\n";
+
 export async function newNote(dir = "") {
-  const prefix = dir ? `${dir}/` : "";
-  let n = `${prefix}Untitled.md`;
-  for (let i = 1; app.files.some((f) => f.path === n); i++) n = `${prefix}Untitled ${i}.md`;
+  const n = freeName(app.files.map((f) => f.path), dir, "Untitled", ".md");
   await createNote(n);
+  await app.refresh();
+  await app.openNote(n);
+}
+
+export async function newBase(dir = "") {
+  const n = freeName(app.files.map((f) => f.path), dir, "Untitled", ".base");
+  await createNote(n, NEW_BASE);
   await app.refresh();
   await app.openNote(n);
 }
@@ -17,6 +26,7 @@ export const defaults: Command[] = [
   { id: "switcher", name: "Quick switcher", hotkey: "Ctrl+O", run: () => (app.palette = "files") },
   { id: "search", name: "Search in all files", hotkey: "Ctrl+Shift+F", run: () => { app.leftPane = "search"; app.showLeft = true; } },
   { id: "new-note", name: "New note", hotkey: "Ctrl+N", run: () => newNote() },
+  { id: "new-base", name: "Create new base", hotkey: "", run: () => newBase() },
   { id: "daily", name: "Open today's daily note", hotkey: "Ctrl+D", run: async () => { const p = await dailyNote(); await app.refresh(); await app.openNote(p); } },
   { id: "close-tab", name: "Close current tab", hotkey: "Ctrl+W", run: () => { const p = app.pane; if (p.active >= 0) app.closeTab(p.id, p.active); } },
   { id: "toggle-mode", name: "Toggle live preview / source", hotkey: "Ctrl+E", run: () => { const t = app.activeTab; if (t) app.setMode(app.pane.id, t.path, t.mode === "source" ? "live" : "source"); } },

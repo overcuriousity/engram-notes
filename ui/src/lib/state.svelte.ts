@@ -28,6 +28,9 @@ class AppStateStore {
   leftPane = $state<"files" | "search">("files");
   watching = $state(true);
   jump = $state<{ pane: number; path: string; line: number } | null>(null);
+  folders = $state<string[]>([]);
+  // The note a local graph centres on: the last one active in any pane.
+  lastNote = $state<string | null>(null);
   private nextId = 2;
 
   get pane(): Pane {
@@ -95,6 +98,7 @@ class AppStateStore {
 
   async refresh() {
     this.files = await api.listFiles();
+    this.folders = await api.listFolders();
     this.titles = await api.titles();
   }
 
@@ -162,11 +166,12 @@ class AppStateStore {
   }
 
   renamed(from: string, to: string) {
-    const d = this.docs[from];
-    if (d) {
-      delete this.docs[from];
-      d.path = to;
-      this.docs[to] = d;
+    for (const path of Object.keys(this.docs)) {
+      if (!L.under(path, from)) continue;
+      const d = this.docs[path];
+      delete this.docs[path];
+      d.path = to + path.slice(from.length);
+      this.docs[d.path] = d;
     }
     this.layout = L.renamePath(this.layout, from, to);
     this.persist();
@@ -174,7 +179,7 @@ class AppStateStore {
 
   forget(path: string) {
     this.layout = L.withoutPath(this.layout, path);
-    delete this.docs[path];
+    for (const p of Object.keys(this.docs)) if (L.under(p, path)) delete this.docs[p];
     this.afterLayoutChange();
   }
 

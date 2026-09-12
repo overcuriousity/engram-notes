@@ -2,6 +2,7 @@
   import { app } from "./lib/state.svelte";
   import { allCommands, chord } from "./lib/commands";
   import { errorMessage } from "./lib/api";
+  import { fileKind } from "./lib/files";
   import VaultPicker from "./components/VaultPicker.svelte";
   import Explorer from "./components/Explorer.svelte";
   import Search from "./components/Search.svelte";
@@ -16,6 +17,11 @@
     const t = app.config?.theme ?? "system";
     if (t === "system") delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = t;
+  });
+
+  $effect(() => {
+    const p = app.activeTab?.path;
+    if (p && fileKind(p) === "note") app.lastNote = p;
   });
 
   function onKey(e: KeyboardEvent) {

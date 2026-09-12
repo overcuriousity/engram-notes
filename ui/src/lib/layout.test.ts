@@ -49,3 +49,14 @@ describe("layout", () => {
     expect(findPane(renamed, 2)?.tabs[0].path).toBe("z.md");
   });
 });
+
+describe("folders in the layout", () => {
+  it("renames and closes everything under a folder", () => {
+    const root: Node = {
+      kind: "pane", id: 1, active: 2,
+      tabs: [{ path: "d/a.md", mode: "live" }, { path: "d.md", mode: "live" }, { path: "d/e/b.md", mode: "live" }],
+    };
+    expect(panes(renamePath(root, "d", "x/d"))[0].tabs.map((t) => t.path)).toEqual(["x/d/a.md", "d.md", "x/d/e/b.md"]);
+    expect(panes(withoutPath(root, "d"))[0].tabs.map((t) => t.path)).toEqual(["d.md"]);
+  });
+});

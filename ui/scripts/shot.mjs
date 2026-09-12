@@ -43,6 +43,12 @@ const mock = `
         case "attachment_path": return FX.root + "/" + args.path;
         case "anchor_line": return FX.anchors?.[args.path + "#" + args.fragment] ?? null;
         case "resolve_link": { const f = FX.files.find((x) => md(x.path) && x.path.split("/").pop().replace(/\\.md$/i, "").toLowerCase() === String(args.target).toLowerCase()); return f ? f.path : null; }
+        case "list_folders": return FX.folders ?? [...new Set(FX.files.flatMap((f) => f.path.split("/").slice(0, -1).map((_, i, a) => a.slice(0, i + 1).join("/"))))];
+        case "graph": return FX.graph ?? { nodes: [], edges: [] };
+        case "get_graph_config": return FX.graphConfig ?? {};
+        case "run_base": { const t = FX.bases?.[args.path]; if (!t) throw { code: "base", message: "no fixture for " + args.path }; return { ...t, view: args.view }; }
+        case "plan_rename": return { from: args.from, to: args.to, affected: FX.affected ?? [] };
+        case "search": return FX.search ?? [];
         case "plugin:event|listen": return ++cb;
         default: return null;
       }
