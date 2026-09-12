@@ -39,7 +39,8 @@
     const name = hash < 0 ? target : target.slice(0, hash);
     const fragment = hash < 0 ? "" : target.slice(hash + 1);
     try {
-      let found = await resolveLink(name);
+      // Notes resolve in the index; a base or attachment is found among the files, as Obsidian opens it.
+      let found = (await resolveLink(name)) ?? resolveFile(app.files, name);
       if (!found) {
         found = `${name}.md`;
         await createNote(found);
