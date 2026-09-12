@@ -14,6 +14,7 @@ impl From<engram_core::Error> for CommandError {
             Error::Config(_) => "config",
             Error::NotFound(_) => "not_found",
             Error::Exists(_) => "exists",
+            Error::Base(_) => "base",
         };
         CommandError {
             code,

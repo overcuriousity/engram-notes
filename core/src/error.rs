@@ -18,6 +18,8 @@ pub enum Error {
     NotFound(String),
     #[error("already exists: {0}")]
     Exists(String),
+    #[error("base error: {0}")]
+    Base(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
