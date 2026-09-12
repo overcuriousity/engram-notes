@@ -2,5 +2,6 @@
 
 pub mod error;
 pub mod parse;
+pub mod vault;
 
 pub use error::{Error, Result};
