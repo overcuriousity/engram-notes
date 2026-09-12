@@ -1,6 +1,8 @@
 //! The derived view of a vault. Rebuildable from the files at any time.
 
+pub mod query;
 pub mod rebuild;
+pub mod resolve;
 
 use crate::{Error, Result};
 use rusqlite::Connection;
@@ -95,11 +97,5 @@ impl Index {
 impl From<rusqlite::Error> for Error {
     fn from(e: rusqlite::Error) -> Self {
         Error::Index(e.to_string())
-    }
-}
-
-impl Index {
-    pub fn resolve_all(&mut self) -> Result<()> {
-        Ok(())
     }
 }

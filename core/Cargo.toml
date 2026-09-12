@@ -6,7 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [lib]
-name = "core"
+name = "engram_core"
 path = "src/lib.rs"
 
 [dependencies]
