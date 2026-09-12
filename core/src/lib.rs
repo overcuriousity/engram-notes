@@ -1,6 +1,7 @@
 //! engram-notes core: parser, vault, index, config. No window, no Tauri.
 
 pub mod error;
+pub mod index;
 pub mod parse;
 pub mod vault;
 
