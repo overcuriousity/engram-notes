@@ -97,6 +97,14 @@ pub fn save_workspace(vault: &Vault, ws: &serde_json::Value) -> Result<()> {
     write_json(&vault.config_dir().join("workspace.json"), ws)
 }
 
+pub fn load_graph(vault: &Vault) -> Result<serde_json::Value> {
+    Ok(read_json(&vault.config_dir().join("graph.json"))?.unwrap_or_else(|| serde_json::json!({})))
+}
+
+pub fn save_graph(vault: &Vault, graph: &serde_json::Value) -> Result<()> {
+    write_json(&vault.config_dir().join("graph.json"), graph)
+}
+
 pub fn daily_note_path(cfg: &AppConfig, today: chrono::NaiveDate) -> String {
     let name = today.format(&cfg.daily_notes.format).to_string();
     let folder = cfg.daily_notes.folder.trim_matches('/');
@@ -160,6 +168,16 @@ mod tests {
         assert_eq!(load_workspace(&v).unwrap(), serde_json::json!({}));
         save_workspace(&v, &serde_json::json!({"tabs": ["a.md"]})).unwrap();
         assert_eq!(load_workspace(&v).unwrap()["tabs"][0], "a.md");
+    }
+
+    #[test]
+    fn graph_settings_are_opaque_json() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        assert_eq!(load_graph(&v).unwrap(), serde_json::json!({}));
+        save_graph(&v, &serde_json::json!({"showOrphans": false})).unwrap();
+        assert_eq!(load_graph(&v).unwrap()["showOrphans"], false);
+        assert!(d.path().join(".engram-notes/graph.json").is_file());
     }
 
     #[test]

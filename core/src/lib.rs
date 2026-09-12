@@ -3,6 +3,7 @@
 pub mod config;
 pub mod error;
 pub mod frontmatter;
+pub mod graph;
 pub mod index;
 pub mod parse;
 pub mod rename;
