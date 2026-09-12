@@ -60,6 +60,14 @@ pub fn recent_vaults() -> Vec<String> {
     read_recent()
 }
 
+/// A folder given on the command line, as in `engram-notes ~/notes`.
+#[tauri::command]
+pub fn startup_vault() -> Option<String> {
+    std::env::args()
+        .skip(1)
+        .find(|a| !a.starts_with('-') && std::path::Path::new(a).is_dir())
+}
+
 #[tauri::command]
 pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdResult<VaultInfo> {
     let vault = Vault::open(&path)?;

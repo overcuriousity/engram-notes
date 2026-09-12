@@ -1,11 +1,13 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
-  import { recentVaults, errorMessage } from "../lib/api";
+  import { recentVaults, startupVault, errorMessage } from "../lib/api";
   import { app } from "../lib/state.svelte";
 
   let recent = $state<string[]>([]);
   onMount(async () => {
+    const start = await startupVault();
+    if (start) return openIt(start);
     recent = await recentVaults();
   });
 

@@ -23,6 +23,7 @@ export interface Change { path: string; kind: "changed" | "removed" }
 export interface CommandError { code: string; message: string }
 
 export const recentVaults = () => invoke<string[]>("recent_vaults");
+export const startupVault = () => invoke<string | null>("startup_vault");
 export const openVault = (path: string) => invoke<VaultInfo>("open_vault", { path });
 export const listFiles = () => invoke<FileEntry[]>("list_files");
 export const readNote = (path: string) => invoke<NoteText>("read_note", { path });

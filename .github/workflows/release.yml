@@ -45,7 +45,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: src-tauri
+          projectPath: ui
+          tauriScript: pnpm tauri
           tagName: ${{ github.ref_name }}
           releaseName: engram-notes ${{ github.ref_name }}
           releaseDraft: true

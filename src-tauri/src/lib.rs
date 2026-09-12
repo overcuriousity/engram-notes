@@ -9,6 +9,7 @@ pub fn run() {
         .manage(state::AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::recent_vaults,
+            commands::startup_vault,
             commands::open_vault,
             commands::list_files,
             commands::read_note,
