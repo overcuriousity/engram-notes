@@ -1811,7 +1811,7 @@ views:
             property: "file.name".into(),
             direction: "DESC".into(),
         };
-        let out = set_sort(BOOKS, 0, &[key.clone()]).unwrap();
+        let out = set_sort(BOOKS, 0, std::slice::from_ref(&key)).unwrap();
         let t = run(&out, &data(), 0, now()).unwrap();
         assert_eq!(t.sort, vec![key]);
         assert_eq!(t.views, vec!["Reading", "All books"]);
