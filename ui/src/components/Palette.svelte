@@ -2,6 +2,7 @@
   import { app } from "../lib/state.svelte";
   import { allCommands } from "../lib/commands";
   import { createNote, errorMessage } from "../lib/api";
+  import { createName, matchCommands, matchNotes } from "../lib/palette";
 
   interface Item { label: string; detail: string; run: () => void | Promise<void> }
 
@@ -9,25 +10,14 @@
   let sel = $state(0);
   let input = $state<HTMLInputElement>();
 
-  function score(t: string, n: string): number {
-    const tl = t.toLowerCase();
-    return tl === n ? 3 : tl.startsWith(n) ? 2 : tl.includes(n) ? 1 : 0;
-  }
-
   const items = $derived.by((): Item[] => {
-    const needle = q.toLowerCase().trim();
     if (app.palette === "commands") {
-      return allCommands()
-        .filter((c) => c.name.toLowerCase().includes(needle))
-        .map((c) => ({ label: c.name, detail: c.hotkey, run: c.run }));
+      return matchCommands(allCommands(), q).map((c) => ({ label: c.name, detail: c.hotkey, run: c.run }));
     }
-    const notes: Item[] = app.titles
-      .filter(([p, t]) => !needle || t.toLowerCase().includes(needle) || p.toLowerCase().includes(needle))
-      .sort((a, b) => score(b[1], needle) - score(a[1], needle))
-      .slice(0, 30)
-      .map(([p, t]) => ({ label: t, detail: p, run: () => app.openNote(p) }));
-    if (needle && !notes.some((n) => n.label.toLowerCase() === needle)) {
-      const name = q.trim();
+    const matches = matchNotes(app.titles, q);
+    const notes: Item[] = matches.map((m) => ({ label: m.title, detail: m.path, run: () => app.openNote(m.path) }));
+    const name = createName(matches, q);
+    if (name) {
       notes.push({
         label: `Create "${name}"`,
         detail: `${name}.md`,
