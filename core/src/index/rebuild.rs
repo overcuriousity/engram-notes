@@ -295,4 +295,18 @@ mod tests {
         let ix = Index::open(&p).unwrap();
         assert_eq!(count(&ix, "SELECT count(*) FROM notes"), 0);
     }
+
+    #[test]
+    fn corrupt_file_is_recreated() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("ix.db");
+        fs::write(&p, vec![b'x'; 4096]).unwrap();
+        assert!(Index::open(&p).is_err());
+        let (ix, recreated) = Index::open_or_recreate(&p).unwrap();
+        assert!(recreated);
+        assert_eq!(count(&ix, "SELECT count(*) FROM notes"), 0);
+        drop(ix);
+        let (_ix, recreated) = Index::open_or_recreate(&p).unwrap();
+        assert!(!recreated);
+    }
 }
