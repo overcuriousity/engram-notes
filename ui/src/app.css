@@ -105,6 +105,6 @@ input[type="checkbox"]:checked { border-color: var(--accent); background: var(--
 .explorer-head { display: flex; justify-content: space-between; align-items: center; }
 .explorer-head button { color: var(--fg-muted); padding: 0 4px; vertical-align: middle; }
 .explorer-head button:hover { color: var(--fg); }
-.tree { min-height: calc(100% - 64px); padding-bottom: 24px; }
+.tree { min-height: calc(100% - 72px); padding-bottom: 24px; }
 .tree.drop, .tree button.drop { background: var(--accent-bg); }
 .tree input.rename { display: block; margin: 1px 0; padding: 1px 6px; font-size: 14px; }
