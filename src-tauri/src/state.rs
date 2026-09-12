@@ -1,0 +1,17 @@
+use engram_core::config::AppConfig;
+use engram_core::index::Index;
+use engram_core::vault::Vault;
+use engram_core::watch::Watcher;
+use std::sync::Mutex;
+
+pub struct Open {
+    pub vault: Vault,
+    pub index: Index,
+    pub config: AppConfig,
+    pub watcher: Option<Watcher>,
+}
+
+#[derive(Default)]
+pub struct AppState {
+    pub open: Mutex<Option<Open>>,
+}

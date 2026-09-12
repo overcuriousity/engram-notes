@@ -1,7 +1,7 @@
 /target
 /core/target
 /src-tauri/target
-/src-tauri/gen/schemas
+/src-tauri/gen
 node_modules/
 /ui/dist
 /ui/.svelte-kit
