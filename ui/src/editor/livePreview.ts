@@ -2,6 +2,7 @@ import { syntaxTree } from "@codemirror/language";
 import { type EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
 import { findWikilinks, displayText, linkTarget } from "../lib/wikilink";
+import { altAndSize, fileKind, imageSize, imageUrl, type ImageResolver } from "../lib/files";
 
 // Lezer-markdown node names whose text is hidden on lines the cursor is not on.
 const HIDDEN = new Set(["HeaderMark", "EmphasisMark", "CodeMark", "StrikethroughMark", "QuoteMark", "LinkMark", "URL"]);
@@ -40,6 +41,26 @@ class CheckboxWidget extends WidgetType {
   ignoreEvent() { return true; }
 }
 
+class ImageWidget extends WidgetType {
+  constructor(readonly src: string | null, readonly alt: string, readonly width?: number, readonly height?: number) { super(); }
+  eq(o: ImageWidget) { return o.src === this.src && o.alt === this.alt && o.width === this.width && o.height === this.height; }
+  toDOM() {
+    if (!this.src) {
+      const s = document.createElement("span");
+      s.className = "cm-embed-missing";
+      s.textContent = this.alt;
+      return s;
+    }
+    const img = document.createElement("img");
+    img.className = "cm-embed-image";
+    img.src = this.src;
+    img.alt = this.alt;
+    if (this.width) img.width = this.width;
+    if (this.height) img.height = this.height;
+    return img;
+  }
+}
+
 class CalloutTitle extends WidgetType {
   constructor(readonly kind: string) { super(); }
   eq(o: CalloutTitle) { return o.kind === this.kind; }
@@ -66,6 +87,7 @@ export function buildDecorations(
   state: EditorState,
   ranges: readonly { from: number; to: number }[],
   focused = true,
+  image?: ImageResolver,
 ): DecorationSet {
   const active = focused ? activeLines(state) : new Set<number>();
   const marks: { from: number; to: number; deco: Decoration }[] = [];
@@ -81,6 +103,14 @@ export function buildDecorations(
         const line = state.doc.lineAt(node.from).number;
         // `[!note]` and other bracketed text without a URL is not a link.
         if ((name === "Link" || name === "Image") && !node.node.getChild("URL")) return false;
+        if (name === "Image" && !active.has(line)) {
+          const url = node.node.getChild("URL")!;
+          const target = state.sliceDoc(url.from, url.to);
+          const text = /^!\[([^\]]*)\]/.exec(state.sliceDoc(node.from, node.to))?.[1] ?? "";
+          const { alt, width, height } = altAndSize(text);
+          push(node.from, node.to, Decoration.replace({ widget: new ImageWidget(imageUrl(target, image), alt || target, width, height) }));
+          return false;
+        }
         if (name === "Blockquote") {
           const first = state.doc.lineAt(node.from);
           const m = CALLOUT.exec(first.text);
@@ -116,13 +146,11 @@ export function buildDecorations(
       const b = from + l.to;
       const line = state.doc.lineAt(a).number;
       const target = linkTarget(l);
-      push(
-        a,
-        b,
-        active.has(line)
-          ? Decoration.mark({ class: "cm-wikilink-src" })
-          : Decoration.replace({ widget: new WikiWidget(displayText(l), target) }),
-      );
+      const size = imageSize(l.alias);
+      const widget = l.embed && fileKind(l.target) === "image"
+        ? new ImageWidget(image?.(l.target) ?? null, l.target, size.width, size.height)
+        : new WikiWidget(displayText(l), target);
+      push(a, b, active.has(line) ? Decoration.mark({ class: "cm-wikilink-src" }) : Decoration.replace({ widget }));
     }
     for (const m of text.matchAll(BLOCK_ID)) {
       const start = from + m.index + m[1].length;
@@ -182,14 +210,14 @@ export function foldFor(state: EditorState): DecorationSet {
   return Decoration.set([Decoration.replace({ widget: new PropertiesFold(), block: true }).range(r.from, r.to)]);
 }
 
-export function livePreview(opts: { onFollow: (target: string) => void }) {
+export function livePreview(opts: { onFollow: (target: string) => void; image?: ImageResolver }) {
   const plugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
-      constructor(view: EditorView) { this.decorations = buildDecorations(view.state, view.visibleRanges, view.hasFocus); }
+      constructor(view: EditorView) { this.decorations = buildDecorations(view.state, view.visibleRanges, view.hasFocus, opts.image); }
       update(u: ViewUpdate) {
         if (u.docChanged || u.viewportChanged || u.selectionSet || u.focusChanged) {
-          this.decorations = buildDecorations(u.view.state, u.view.visibleRanges, u.view.hasFocus);
+          this.decorations = buildDecorations(u.view.state, u.view.visibleRanges, u.view.hasFocus, opts.image);
         }
       }
     },
@@ -217,6 +245,8 @@ export function livePreview(opts: { onFollow: (target: string) => void }) {
     ".cm-quote": { borderLeft: "3px solid var(--border)", paddingLeft: "12px !important", color: "var(--fg-muted)" },
     ".cm-callout": { borderLeft: "3px solid var(--accent)", background: "var(--accent-bg)", paddingLeft: "12px !important" },
     ".cm-block-id": { color: "var(--fg-muted)", fontSize: "0.85em" },
+    ".cm-embed-image": { maxWidth: "100%", verticalAlign: "top", borderRadius: "4px" },
+    ".cm-embed-missing": { color: "var(--fg-muted)", border: "1px dashed var(--border)", borderRadius: "4px", padding: "0 6px" },
     ".cm-callout-type": { fontWeight: "600", textTransform: "capitalize", color: "var(--accent)" },
     ".cm-props-fold": {
       color: "var(--fg-muted)", fontSize: "12px", textTransform: "uppercase", letterSpacing: ".06em",

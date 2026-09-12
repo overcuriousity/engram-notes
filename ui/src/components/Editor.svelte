@@ -23,13 +23,14 @@
     onFollow: (target: string) => void;
     titles: () => [string, string][];
     tags: () => string[];
+    image: (target: string) => string | null;
   }
-  let { text, mode, focus, jump, onJumped, onchange, onblur, onFollow, titles, tags }: Props = $props();
+  let { text, mode, focus, jump, onJumped, onchange, onblur, onFollow, titles, tags, image }: Props = $props();
   let host: HTMLDivElement;
   // State, so effects that need the view run again once it exists.
   let view = $state.raw<EditorView>();
   const modeComp = new Compartment();
-  const forMode = (m: string) => (m === "live" ? livePreview({ onFollow }) : []);
+  const forMode = (m: string) => (m === "live" ? livePreview({ onFollow, image }) : []);
 
   onMount(() => {
     view = new EditorView({

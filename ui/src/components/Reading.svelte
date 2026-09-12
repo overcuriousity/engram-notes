@@ -6,9 +6,10 @@
     onJumped: () => void;
     onFollow: (t: string) => void;
     onToggleTask: (line: number) => void;
+    image: (target: string) => string | null;
   }
-  let { text, jump, onJumped, onFollow, onToggleTask }: Props = $props();
-  const html = $derived(renderMarkdown(text));
+  let { text, jump, onJumped, onFollow, onToggleTask, image }: Props = $props();
+  const html = $derived(renderMarkdown(text, { image }));
   let host = $state<HTMLDivElement>();
 
   // Elements come in source order, so the last one starting at or before the line holds it.
@@ -49,4 +50,6 @@
   .reading :global(.callout)::before { content: attr(data-title); display: block; font-weight: 600; margin-bottom: 4px; }
   .reading :global(table) { border-collapse: collapse; }
   .reading :global(td), .reading :global(th) { border: 1px solid var(--border); padding: 4px 8px; }
+  .reading :global(img.embed) { max-width: 100%; border-radius: 4px; }
+  .reading :global(.embed-missing) { color: var(--fg-muted); border: 1px dashed var(--border); border-radius: 4px; padding: 0 6px; }
 </style>

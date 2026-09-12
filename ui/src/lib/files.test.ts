@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileKind, imageSize, resolveFile, tabTitle } from "./files";
+import { altAndSize, fileKind, imageSize, imageUrl, resolveFile, tabTitle } from "./files";
 
 describe("fileKind", () => {
   it("sorts files by what can show them", () => {
@@ -32,5 +32,19 @@ describe("file resolution and titles", () => {
     expect(tabTitle("graph:global")).toBe("Graph view");
     expect(tabTitle("graph:local")).toBe("Local graph");
     expect(tabTitle("a/Note.md")).toBe("Note");
+  });
+});
+
+describe("image urls", () => {
+  it("reads a size off markdown alt text", () => {
+    expect(altAndSize("cap|120")).toEqual({ alt: "cap", width: 120 });
+    expect(altAndSize("a|b")).toEqual({ alt: "a|b" });
+  });
+  it("passes remote urls and resolves vault paths", () => {
+    const image = (t: string) => (t === "my x.png" ? "asset://ok" : null);
+    expect(imageUrl("https://e.com/a.png", image)).toBe("https://e.com/a.png");
+    expect(imageUrl("my%20x.png", image)).toBe("asset://ok");
+    expect(imageUrl("gone.png", image)).toBeNull();
+    expect(imageUrl("bad%zz.png", () => "asset://raw")).toBe("asset://raw");
   });
 });

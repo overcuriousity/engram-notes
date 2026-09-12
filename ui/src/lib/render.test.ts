@@ -3,9 +3,21 @@ import { renderMarkdown } from "./render";
 
 describe("renderMarkdown", () => {
   it("renders wikilinks as anchors with targets", () => {
-    const h = renderMarkdown("see [[Note#Sec|shown]] and ![[pic.png]]");
+    const h = renderMarkdown("see [[Note#Sec|shown]] and ![[Other]]");
     expect(h).toContain('<a class="wikilink" data-target="Note#Sec">shown</a>');
-    expect(h).toContain('<img data-embed="pic.png"');
+    expect(h).toContain('<a class="wikilink" data-target="Other">Other</a>');
+  });
+  it("embeds images through the resolver with Obsidian's sizes", () => {
+    const image = (t: string) => (t.startsWith("gone") ? null : `asset://${t}`);
+    const h = renderMarkdown(
+      "![[pic.png|300]] ![[wide.png|300x200]] ![cap|120](img/my%20x.png) ![[gone.png]] ![r](https://e.com/a.png)",
+      { image },
+    );
+    expect(h).toContain('<img class="embed" src="asset://pic.png" alt="pic.png" width="300">');
+    expect(h).toContain('alt="wide.png" width="300" height="200"');
+    expect(h).toContain('<img class="embed" src="asset://img/my x.png" alt="cap" width="120">');
+    expect(h).toContain('<span class="embed-missing">gone.png</span>');
+    expect(h).toContain('src="https://e.com/a.png"');
   });
   it("renders tags and checkboxes", () => {
     const h = renderMarkdown("- [x] done #work\n- [ ] todo");

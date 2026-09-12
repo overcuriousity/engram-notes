@@ -2952,7 +2952,7 @@ Append to `ui/src/app.css`:
 .explorer-head { display: flex; justify-content: space-between; align-items: center; }
 .explorer-head button { color: var(--fg-muted); padding: 0 4px; vertical-align: middle; }
 .explorer-head button:hover { color: var(--fg); }
-.tree { min-height: calc(100% - 64px); padding-bottom: 24px; }
+.tree { min-height: calc(100% - 72px); padding-bottom: 24px; }
 .tree.drop, .tree button.drop { background: var(--accent-bg); }
 .tree input.rename { display: block; margin: 1px 0; padding: 1px 6px; font-size: 14px; }
 ```
@@ -3106,7 +3106,8 @@ In `ui/src/lib/render.ts`:
 ```ts
 import { altAndSize, fileKind, imageSize, imageUrl, type ImageResolver } from "./files";
 
-export interface RenderOptions { image?: ImageResolver }
+// A type alias, so it fits markdown-it's indexable `env`.
+export type RenderOptions = { image?: ImageResolver };
 
 function imageHtml(alt: string, src: string | null, size: { width?: number; height?: number }): string {
   if (!src) return `<span class="embed-missing">${escapeHtml(alt)}</span>`;
@@ -3131,12 +3132,12 @@ After the rules, markdown images:
 
 ```ts
 // Vault paths in markdown images load through the same resolver as embeds.
-md.renderer.rules.image = (tokens, idx, options, env: RenderOptions) => {
+md.renderer.rules.image = (tokens, idx, options, env) => {
   const tok = tokens[idx];
-  const url = tok.attrGet("src") ?? "";
+  const url = String(tok.attrGet("src") ?? "");
   const text = md.renderer.renderInlineAsText(tok.children ?? [], options, env);
   const { alt, ...size } = altAndSize(text);
-  return imageHtml(alt || url, imageUrl(url, env.image), size);
+  return imageHtml(alt || url, imageUrl(url, (env as RenderOptions | undefined)?.image), size);
 };
 
 export function renderMarkdown(text: string, opts: RenderOptions = {}): string {

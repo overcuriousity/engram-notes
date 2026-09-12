@@ -39,3 +39,24 @@ export function tabTitle(path: string): string {
   if (path === "graph:local") return "Local graph";
   return path.slice(path.lastIndexOf("/") + 1).replace(/\.(md|base)$/i, "");
 }
+
+export type ImageResolver = (target: string) => string | null;
+
+/** `![caption|300](url)`: Obsidian reads a trailing size off the alt text. */
+export function altAndSize(text: string): { alt: string; width?: number; height?: number } {
+  const i = text.lastIndexOf("|");
+  const size = i >= 0 ? imageSize(text.slice(i + 1)) : {};
+  return size.width ? { alt: text.slice(0, i), ...size } : { alt: text };
+}
+
+/** A markdown image's URL for the webview: remote URLs pass, vault paths go through `image`. */
+export function imageUrl(url: string, image?: ImageResolver): string | null {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
+  let path = url;
+  try {
+    path = decodeURIComponent(url);
+  } catch {
+    // a stray % is part of the name
+  }
+  return image?.(path) ?? null;
+}

@@ -1,19 +1,29 @@
 import MarkdownIt from "markdown-it";
 import { findWikilinks, displayText, linkTarget } from "./wikilink";
+import { altAndSize, fileKind, imageSize, imageUrl, type ImageResolver } from "./files";
 
 const md = new MarkdownIt({ html: false, linkify: true });
 
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const escapeAttr = (s: string) => escapeHtml(s).replace(/"/g, "&quot;");
 
-function wikilinkHtml(raw: string): string {
+// A type alias, so it fits markdown-it's indexable `env`.
+export type RenderOptions = { image?: ImageResolver };
+
+function imageHtml(alt: string, src: string | null, size: { width?: number; height?: number }): string {
+  if (!src) return `<span class="embed-missing">${escapeHtml(alt)}</span>`;
+  const w = size.width ? ` width="${size.width}"` : "";
+  const h = size.height ? ` height="${size.height}"` : "";
+  return `<img class="embed" src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"${w}${h}>`;
+}
+
+function wikilinkHtml(raw: string, opts: RenderOptions): string {
   const l = findWikilinks(raw)[0];
   if (!l) return escapeHtml(raw);
-  const target = linkTarget(l);
-  if (l.embed && /\.(png|jpe?g|gif|svg|webp)$/i.test(l.target)) {
-    return `<img data-embed="${escapeAttr(l.target)}" alt="${escapeAttr(l.target)}">`;
+  if (l.embed && fileKind(l.target) === "image") {
+    return imageHtml(l.target, opts.image?.(l.target) ?? null, imageSize(l.alias));
   }
-  return `<a class="wikilink" data-target="${escapeAttr(target)}">${escapeHtml(displayText(l))}</a>`;
+  return `<a class="wikilink" data-target="${escapeAttr(linkTarget(l))}">${escapeHtml(displayText(l))}</a>`;
 }
 
 // Runs before markdown-it's own link rule, so `[[...]]` is never read as a
@@ -26,7 +36,7 @@ md.inline.ruler.before("link", "wikilink", (state, silent) => {
   if (end < 0) return false;
   if (!silent) {
     const tok = state.push("html_inline", "", 0);
-    tok.content = wikilinkHtml(src.slice(state.pos, end + 2));
+    tok.content = wikilinkHtml(src.slice(state.pos, end + 2), state.env as RenderOptions);
   }
   state.pos = end + 2;
   return true;
@@ -107,6 +117,15 @@ function blankFrontmatter(text: string): string {
   return m ? m[0].replace(/[^\n]/g, "") + text.slice(m[0].length) : text;
 }
 
-export function renderMarkdown(text: string): string {
-  return md.render(blankFrontmatter(text));
+// Vault paths in markdown images load through the same resolver as embeds.
+md.renderer.rules.image = (tokens, idx, options, env) => {
+  const tok = tokens[idx];
+  const url = String(tok.attrGet("src") ?? "");
+  const text = md.renderer.renderInlineAsText(tok.children ?? [], options, env);
+  const { alt, ...size } = altAndSize(text);
+  return imageHtml(alt || url, imageUrl(url, (env as RenderOptions | undefined)?.image), size);
+};
+
+export function renderMarkdown(text: string, opts: RenderOptions = {}): string {
+  return md.render(blankFrontmatter(text), opts);
 }

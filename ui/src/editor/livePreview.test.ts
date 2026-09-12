@@ -16,9 +16,9 @@ function stateOf(doc: string, cursor: number) {
 }
 
 // Each decoration as the text it covers and a name: widget class, CSS class, or "hide".
-function decos(doc: string, cursor = doc.length, focused = true) {
+function decos(doc: string, cursor = doc.length, focused = true, image?: (t: string) => string | null) {
   const out: { text: string; kind: string }[] = [];
-  buildDecorations(stateOf(doc, cursor), [{ from: 0, to: doc.length }], focused).between(0, doc.length, (from, to, d) => {
+  buildDecorations(stateOf(doc, cursor), [{ from: 0, to: doc.length }], focused, image).between(0, doc.length, (from, to, d) => {
     const spec = d.spec;
     const kind = spec.widget ? spec.widget.constructor.name : (spec.class ?? "hide");
     out.push({ text: doc.slice(from, to), kind });
@@ -62,5 +62,14 @@ describe("live preview decorations", () => {
     const doc = "---\na: 1\n---\nbody";
     expect(foldFor(stateOf(doc, doc.length)).size).toBe(1);
     expect(foldFor(stateOf(doc, 5)).size).toBe(0);
+  });
+
+  it("draws image embeds and markdown images off the cursor line", () => {
+    const image = (t: string) => `asset://${t}`;
+    const doc = "![[pic.png|300]]\n\n![cap](img/a.png)\n\n![[Note]]\n\nz";
+    const d = decos(doc, doc.length, true, image);
+    expect(d.filter((x) => x.kind === "ImageWidget").map((x) => x.text)).toEqual(["![[pic.png|300]]", "![cap](img/a.png)"]);
+    expect(d).toContainEqual({ text: "![[Note]]", kind: "WikiWidget" });
+    expect(decos(doc, 0, true, image)[0]).toEqual({ text: "![[pic.png|300]]", kind: "cm-wikilink-src" });
   });
 });

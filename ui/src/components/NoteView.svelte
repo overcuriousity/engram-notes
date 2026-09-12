@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { convertFileSrc } from "@tauri-apps/api/core";
+  import { resolveFile } from "../lib/files";
   import { app } from "../lib/state.svelte";
   import { findPane } from "../lib/layout";
   import { resolveLink, createNote, anchorLine, tags as apiTags, errorMessage } from "../lib/api";
@@ -7,6 +9,11 @@
   import Reading from "./Reading.svelte";
 
   let { paneId, path }: { paneId: number; path: string } = $props();
+  // The asset protocol is scoped to the open vault.
+  const image = (target: string) => {
+    const p = resolveFile(app.files, target);
+    return p && app.root ? convertFileSrc(`${app.root}/${p}`) : null;
+  };
   // Read from the store so edits mutate state the store owns.
   const doc = $derived(app.docs[path]);
   const mode = $derived(findPane(app.layout, paneId)?.tabs.find((t) => t.path === path)?.mode ?? "live");
@@ -70,7 +77,7 @@
   </div>
   <div class="note">
     {#if mode === "reading"}
-      <Reading text={doc.text} {jump} onJumped={jumped} onFollow={follow} onToggleTask={toggleTask} />
+      <Reading text={doc.text} {image} {jump} onJumped={jumped} onFollow={follow} onToggleTask={toggleTask} />
     {:else}
       <Editor
         text={doc.text}
@@ -83,6 +90,7 @@
         onFollow={follow}
         titles={() => app.titles}
         tags={() => tagList}
+        {image}
       />
     {/if}
   </div>
