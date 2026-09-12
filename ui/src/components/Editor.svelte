@@ -4,7 +4,8 @@
   import { EditorView, keymap, drawSelection, highlightActiveLine } from "@codemirror/view";
   import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
   import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-  import { markdown } from "@codemirror/lang-markdown";
+  import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+  import { yamlFrontmatter } from "@codemirror/lang-yaml";
   import { languages } from "@codemirror/language-data";
   import { editorTheme, markdownHighlight } from "../editor/theme";
   import { livePreview } from "../editor/livePreview";
@@ -35,7 +36,8 @@
           drawSelection(),
           highlightActiveLine(),
           highlightSelectionMatches(),
-          markdown({ codeLanguages: languages }),
+          // GFM for tasks and strikethrough; YAML so frontmatter is not read as a heading.
+          yamlFrontmatter({ content: markdown({ base: markdownLanguage, codeLanguages: languages }) }),
           editorTheme,
           markdownHighlight,
           EditorView.lineWrapping,
@@ -54,6 +56,9 @@
         ],
       }),
     });
+    // Start below the frontmatter so live preview can fold it.
+    const fm = /^---\r?\n[\s\S]*?\r?\n---(\r?\n|$)/.exec(text);
+    if (fm) view.dispatch({ selection: { anchor: Math.min(fm[0].length, text.length) } });
     view.focus();
     return () => view?.destroy();
   });

@@ -5,7 +5,9 @@
   import Editor from "./Editor.svelte";
   import Reading from "./Reading.svelte";
 
-  let { tab }: { tab: Tab } = $props();
+  let { path }: { path: string } = $props();
+  // Read from the store so edits mutate state the store owns.
+  const tab = $derived(app.tabs.find((t) => t.path === path) as Tab);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let tagList = $state<string[]>([]);
   onMount(async () => {
@@ -21,13 +23,13 @@
   async function follow(target: string) {
     const [name] = target.split("#");
     try {
-      let path = await resolveLink(name);
-      if (!path) {
-        path = `${name}.md`;
-        await createNote(path);
+      let found = await resolveLink(name);
+      if (!found) {
+        found = `${name}.md`;
+        await createNote(found);
         await app.refresh();
       }
-      await app.openNote(path);
+      await app.openNote(found);
     } catch (e) {
       app.say(errorMessage(e));
     }

@@ -32,6 +32,7 @@
   const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
 </script>
 
+{#if app.activeTab}
 <div class="pane-title">Properties</div>
 <div class="props">
   {#each Object.entries(props) as [k, v] (k)}
@@ -41,3 +42,4 @@
   <input placeholder="new key" bind:value={newKey} />
   <input placeholder="value" onchange={(e) => { if (newKey) { void commit(newKey, e.currentTarget.value); newKey = ""; } }} />
 </div>
+{/if}

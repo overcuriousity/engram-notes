@@ -49,7 +49,7 @@
     <main class="centre">
       <Tabs />
       {#if app.activeTab}
-        {#key app.activeTab.path}<NoteView tab={app.activeTab} />{/key}
+        {#key app.activeTab.path}<NoteView path={app.activeTab.path} />{/key}
       {:else}
         <div class="note" style="display:grid;place-items:center;color:var(--fg-muted)">No note open</div>
       {/if}

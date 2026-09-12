@@ -34,9 +34,9 @@ class AppStateStore {
     const ws = await api.getWorkspace();
     const open = (ws.tabs as string[] | undefined) ?? [];
     for (const p of open) {
-      try { await this.openNote(p, false); } catch { /* the note went away since last session */ }
+      try { await this.openNote(p, false, false); } catch { /* the note went away since last session */ }
     }
-    this.active = Math.min(Number(ws.active ?? 0), this.tabs.length - 1);
+    this.active = this.tabs.length ? Math.max(0, Math.min(Number(ws.active ?? 0), this.tabs.length - 1)) : -1;
     await api.onIndexChanged(() => this.refresh());
     await api.onFileChanged((c) => this.externalChange(c));
   }
@@ -46,10 +46,13 @@ class AppStateStore {
     this.titles = await api.titles();
   }
 
-  async openNote(path: string, activate = true) {
+  async openNote(path: string, activate = true, persist = true) {
     const i = this.tabs.findIndex((t) => t.path === path);
     if (i >= 0) {
-      if (activate) this.active = i;
+      if (activate) {
+        this.active = i;
+        this.persist();
+      }
       return;
     }
     const n = await api.readNote(path);
@@ -62,7 +65,7 @@ class AppStateStore {
       conflict: false,
     });
     if (activate) this.active = this.tabs.length - 1;
-    this.persist();
+    if (persist) this.persist();
   }
 
   closeTab(i: number) {
