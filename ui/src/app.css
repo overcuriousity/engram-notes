@@ -70,8 +70,16 @@ mark { background: var(--mark); color: inherit; }
 .linkrow:hover { background: var(--bg-3); }
 .linkrow .src { font-weight: 500; }
 .linkrow .ctx { color: var(--fg-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.props { padding: 4px 12px; display: grid; grid-template-columns: 1fr 2fr; gap: 4px 8px; font-size: 13px; }
+.props { padding: 4px 12px; display: grid; grid-template-columns: minmax(60px, max-content) 1fr auto; gap: 4px 8px; font-size: 13px; align-items: center; }
+.props .key { color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .props input { padding: 2px 6px; min-width: 0; }
+.props input[type="checkbox"] { justify-self: start; accent-color: var(--accent); }
+.props .remove { color: var(--fg-muted); opacity: .5; }
+.props .remove:hover { opacity: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; }
+.chip { display: inline-flex; align-items: center; background: var(--accent-bg); border-radius: 10px; padding: 0 2px 0 8px; font-size: 12px; }
+.chip button { color: var(--fg-muted); padding: 0 4px; }
+.chip-input { width: 64px; border: none !important; background: transparent !important; padding: 0 4px !important; }
 .panestrip { display: flex; border-bottom: 1px solid var(--border); }
 .panestrip button { flex: 1; padding: 6px; color: var(--fg-muted); }
 .panestrip button.active { color: var(--fg); border-bottom: 2px solid var(--accent); }
