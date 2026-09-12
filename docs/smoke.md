@@ -18,4 +18,10 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
 14. Edit a property in the right pane: the frontmatter in the editor updates.
 15. Reading mode renders a callout; a checkbox toggles and writes to disk.
 16. Dark and light themes are both readable in editor, reading view and sidebars.
-17. `cargo test --workspace` and `pnpm check && pnpm test` pass.
+17. Split right and split down from the palette: the note opens beside itself, typing in one pane shows in the other, dividers drag, and the layout survives a restart.
+18. Closing the last tab of a pane closes the pane; the last pane stays.
+19. Click an image and a PDF in the explorer: both preview; *Open in default app* opens them.
+20. `[[Note#Heading]]` and `[[Note#^block]]` open the note scrolled to the line in live and reading mode.
+21. List properties show as chips; adding and removing one rewrites the frontmatter.
+22. Corrupt the index file while the app is closed: the next open says it rebuilt the index.
+23. `cargo test --workspace` and `pnpm check && pnpm test` pass.

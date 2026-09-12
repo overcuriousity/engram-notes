@@ -1,0 +1,27 @@
+{
+  "root": "/vault",
+  "config": {
+    "editor": { "default_mode": "live" },
+    "daily_notes": { "folder": "Daily", "template": null, "format": "%Y-%m-%d" },
+    "hotkeys": {},
+    "theme": "light"
+  },
+  "files": [
+    { "path": "A.md", "text": "---\ntags: [project, urgent]\ndone: true\n---\n# Alpha\n\nSee [[B]] and [[B#^blk]].\n\n- [ ] a task\n- [x] done task\n" },
+    { "path": "B.md", "text": "> [!note] Callout\n> body text\n\nthe block ^blk\n\nback to [[A]]\n" }
+  ],
+  "workspace": {
+    "layout": {
+      "kind": "split", "id": 3, "dir": "row", "sizes": [0.5, 0.5],
+      "children": [
+        { "kind": "pane", "id": 1, "tabs": [{ "path": "A.md", "mode": "live" }], "active": 0 },
+        { "kind": "split", "id": 4, "dir": "column", "sizes": [0.6, 0.4],
+          "children": [
+            { "kind": "pane", "id": 2, "tabs": [{ "path": "B.md", "mode": "reading" }], "active": 0 },
+            { "kind": "pane", "id": 5, "tabs": [{ "path": "A.md", "mode": "source" }], "active": 0 }
+          ] }
+      ]
+    },
+    "activePane": 2
+  }
+}
