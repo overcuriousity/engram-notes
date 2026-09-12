@@ -1,5 +1,6 @@
 //! The derived view of a vault. Rebuildable from the files at any time.
 
+pub mod fts;
 pub mod query;
 pub mod rebuild;
 pub mod resolve;
