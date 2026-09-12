@@ -1,6 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./api";
 import * as L from "./layout";
+import { fileKind } from "./files";
 import type { Dir, Mode, Node, Pane, TabRef } from "./layout";
 
 export interface Doc {
@@ -79,7 +80,7 @@ class AppStateStore {
         };
     for (const path of new Set(L.panes(layout).flatMap((p) => p.tabs.map((t) => t.path)))) {
       try {
-        await this.load(path);
+        if (fileKind(path) === "note") await this.load(path);
       } catch {
         layout = L.withoutPath(layout, path); // gone since last session
       }
@@ -107,7 +108,7 @@ class AppStateStore {
     const p = this.pane;
     const i = p.tabs.findIndex((t) => t.path === path);
     if (i >= 0) return this.activate(p.id, i);
-    await this.load(path);
+    if (fileKind(path) === "note") await this.load(path);
     p.tabs.push({ path, mode: this.config?.editor.default_mode ?? "live" });
     p.active = p.tabs.length - 1;
     this.persist();

@@ -35,6 +35,8 @@ pub fn run() {
             commands::daily_note,
             commands::rescan,
             commands::anchor_line,
+            commands::attachment_path,
+            commands::open_external,
         ])
         .run(tauri::generate_context!())
         .expect("error while running engram-notes");

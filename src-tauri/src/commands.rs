@@ -8,6 +8,7 @@ use engram_core::rename::RenamePlan;
 use engram_core::vault::{FileEntry, Vault};
 use engram_core::watch::{Change, ChangeKind};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(serde::Serialize)]
 pub struct VaultInfo {
@@ -74,6 +75,12 @@ pub fn startup_vault() -> Option<String> {
 #[tauri::command]
 pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdResult<VaultInfo> {
     let vault = Vault::open(&path)?;
+    app.asset_protocol_scope()
+        .allow_directory(vault.root(), true)
+        .map_err(|e| CommandError {
+            code: "io",
+            message: e.to_string(),
+        })?;
     let (mut index, index_recreated) = Index::open_or_recreate(&config::index_path(&vault)?)?;
     let stats = index.rebuild(&vault)?;
     let cfg = config::load_config(&vault)?;
@@ -110,6 +117,25 @@ fn on_watch(app: &AppHandle, event: Result<Vec<Change>, String>) {
             let _ = app.emit("watch-failed", message);
         }
     }
+}
+
+/// A vault file's absolute path, for the webview's asset protocol.
+#[tauri::command]
+pub fn attachment_path(state: State<AppState>, path: String) -> CmdResult<String> {
+    with_open(&state, |o| {
+        Ok(o.vault.abs(&path).to_string_lossy().into_owned())
+    })
+}
+
+#[tauri::command]
+pub fn open_external(app: AppHandle, state: State<AppState>, path: String) -> CmdResult<()> {
+    let abs = with_open(&state, |o| Ok(o.vault.abs(&path)))?;
+    app.opener()
+        .open_path(abs.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|e| CommandError {
+            code: "io",
+            message: e.to_string(),
+        })
 }
 
 /// Catches up with edits a failed watcher missed.

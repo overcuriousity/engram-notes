@@ -13,7 +13,7 @@
     "windows": [
       { "title": "engram-notes", "width": 1280, "height": 820, "minWidth": 720, "minHeight": 480 }
     ],
-    "security": { "csp": null }
+    "security": { "csp": null, "assetProtocol": { "enable": true, "scope": [] } }
   },
   "bundle": {
     "active": true,

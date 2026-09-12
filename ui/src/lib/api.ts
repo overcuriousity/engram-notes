@@ -48,6 +48,8 @@ export const getWorkspace = () => invoke<Record<string, unknown>>("get_workspace
 export const setWorkspace = (workspace: Record<string, unknown>) => invoke<void>("set_workspace", { workspace });
 export const dailyNote = () => invoke<string>("daily_note");
 export const rescan = () => invoke<RebuildStats>("rescan");
+export const attachmentPath = (path: string) => invoke<string>("attachment_path", { path });
+export const openExternal = (path: string) => invoke<void>("open_external", { path });
 export const anchorLine = (path: string, fragment: string) => invoke<number | null>("anchor_line", { path, fragment });
 
 export const onIndexChanged = (f: (c: Change[]) => void): Promise<UnlistenFn> =>

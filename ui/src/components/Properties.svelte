@@ -32,7 +32,7 @@
   const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
 </script>
 
-{#if app.activeTab}
+{#if app.activeDoc}
 <div class="pane-title">Properties</div>
 <div class="props">
   {#each Object.entries(props) as [k, v] (k)}

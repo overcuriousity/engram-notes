@@ -3,6 +3,8 @@
   import type { Pane } from "../lib/layout";
   import Tabs from "./Tabs.svelte";
   import NoteView from "./NoteView.svelte";
+  import FileView from "./FileView.svelte";
+  import { fileKind } from "../lib/files";
 
   let { pane }: { pane: Pane } = $props();
   const tab = $derived(pane.active >= 0 ? pane.tabs[pane.active] : null);
@@ -18,7 +20,13 @@
 >
   <Tabs {pane} />
   {#if tab}
-    {#key tab.path}<NoteView paneId={pane.id} path={tab.path} />{/key}
+    {#key tab.path}
+      {#if fileKind(tab.path) === "note"}
+        <NoteView paneId={pane.id} path={tab.path} />
+      {:else}
+        <FileView path={tab.path} />
+      {/if}
+    {/key}
   {:else}
     <div class="note empty">No note open</div>
   {/if}
