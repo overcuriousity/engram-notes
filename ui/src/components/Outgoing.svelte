@@ -22,7 +22,7 @@
 </script>
 
 <div class="pane-title">Outgoing links ({rows.length})</div>
-{#each rows as r (r.line + r.target_raw)}
+{#each rows as r, i (i)}
   <button class="linkrow" onclick={() => open(r)}>
     <div class="src">{r.target_raw}{r.target_path ? "" : " (not created)"}</div>
     <div class="ctx">{r.context}</div>

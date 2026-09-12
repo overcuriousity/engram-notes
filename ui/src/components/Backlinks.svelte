@@ -11,7 +11,7 @@
 </script>
 
 <div class="pane-title">Backlinks ({rows.length})</div>
-{#each rows as r (r.src_path + r.line)}
+{#each rows as r, i (i)}
   <button class="linkrow" onclick={() => app.openNote(r.src_path, r.line)}>
     <div class="src">{r.src_path.replace(/\.md$/i, "")}</div>
     <div class="ctx">{r.context}</div>
