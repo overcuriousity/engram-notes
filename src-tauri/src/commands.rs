@@ -1,6 +1,8 @@
 use crate::error::{CmdResult, CommandError};
 use crate::state::{AppState, Open};
+use engram_core::bases::{SortKey, Table};
 use engram_core::config::{self, AppConfig};
+use engram_core::graph::Graph;
 use engram_core::index::fts::FtsHit;
 use engram_core::index::query::{LinkRow, TagCount, Unresolved};
 use engram_core::index::{Index, RebuildStats};
@@ -218,6 +220,53 @@ pub fn create_folder(state: State<AppState>, path: String) -> CmdResult<()> {
 }
 
 #[tauri::command]
+pub fn list_folders(state: State<AppState>) -> CmdResult<Vec<String>> {
+    with_open(&state, |o| Ok(o.vault.folders()?))
+}
+
+#[tauri::command]
+pub fn graph(state: State<AppState>) -> CmdResult<Graph> {
+    with_open(&state, |o| {
+        Ok(engram_core::graph::build(&o.index, &o.vault.walk()?)?)
+    })
+}
+
+#[tauri::command]
+pub fn get_graph_config(state: State<AppState>) -> CmdResult<serde_json::Value> {
+    with_open(&state, |o| Ok(config::load_graph(&o.vault)?))
+}
+
+#[tauri::command]
+pub fn set_graph_config(state: State<AppState>, config: serde_json::Value) -> CmdResult<()> {
+    with_open(&state, |o| Ok(config::save_graph(&o.vault, &config)?))
+}
+
+#[tauri::command]
+pub fn run_base(state: State<AppState>, path: String, view: usize) -> CmdResult<Table> {
+    with_open(&state, |o| {
+        let text = o.vault.read(&path)?;
+        let notes = engram_core::bases::notes(&o.index)?;
+        let now = chrono::Local::now().naive_local();
+        Ok(engram_core::bases::run(&text, &notes, view, now)?)
+    })
+}
+
+#[tauri::command]
+pub fn set_base_sort(
+    state: State<AppState>,
+    path: String,
+    view: usize,
+    sort: Vec<SortKey>,
+) -> CmdResult<()> {
+    with_open(&state, |o| {
+        let text = o.vault.read(&path)?;
+        o.vault
+            .write(&path, &engram_core::bases::set_sort(&text, view, &sort)?)?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
 pub fn delete_file(state: State<AppState>, path: String) -> CmdResult<()> {
     with_open(&state, |o| {
         o.vault.delete(&path)?;
@@ -423,6 +472,50 @@ mod tests {
             json!({"src_path": "a.md", "target_raw": "B", "target_path": null, "kind": "wiki",
                    "heading": null, "block": "x", "alias": null, "line": 3, "context": "c"})
         );
+    }
+
+    #[test]
+    fn graph_and_base_table() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("A.md"), "---\ns: 1\n---\n[[Ghost]]").unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        let g = engram_core::graph::build(&ix, &v.walk().unwrap()).unwrap();
+        assert_eq!(
+            serde_json::to_value(&g).unwrap(),
+            json!({
+                "nodes": [
+                    {"id": "A.md", "title": "A", "kind": "note", "tags": []},
+                    {"id": "Ghost", "title": "Ghost", "kind": "unresolved", "tags": []}
+                ],
+                "edges": [{"source": "A.md", "target": "Ghost"}]
+            })
+        );
+        let notes = engram_core::bases::notes(&ix).unwrap();
+        let now = chrono::Local::now().naive_local();
+        let t = engram_core::bases::run(
+            "views:\n  - type: table\n    order: [file.basename, s]\n",
+            &notes,
+            0,
+            now,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(&t).unwrap(),
+            json!({
+                "views": ["View 1"], "view": 0,
+                "columns": [
+                    {"id": "file.basename", "label": "file basename", "editable": false},
+                    {"id": "note.s", "label": "s", "editable": true}
+                ],
+                "rows": [{"path": "A.md", "cells": ["A", 1]}],
+                "sort": [], "errors": []
+            })
+        );
+        let k: engram_core::bases::SortKey =
+            serde_json::from_value(json!({"property": "s", "direction": "DESC"})).unwrap();
+        assert_eq!(k.direction, "DESC");
     }
 
     #[test]
