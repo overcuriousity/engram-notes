@@ -24,4 +24,14 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
 20. `[[Note#Heading]]` and `[[Note#^block]]` open the note scrolled to the line in live and reading mode.
 21. List properties show as chips; adding and removing one rewrites the frontmatter.
 22. Corrupt the index file while the app is closed: the next open says it rebuilt the index.
-23. `cargo test --workspace` and `pnpm check && pnpm test` pass.
+24. Right-click a folder: rename it in place; links with its path are rewritten and open tabs follow.
+25. Delete a folder: it and its notes go to the trash and their tabs close.
+26. Drag a note and a folder onto another folder: both move and links follow; dropping on empty space moves to the root.
+27. New folder appears as Untitled, ready to type a name; an empty folder stays listed.
+28. `![[pic.png|200]]` and `![caption](img/pic.png)` show images in live preview and reading view.
+29. Ctrl+G opens the graph: hover highlights neighbours, click opens a note, wheel zooms, drag pans and moves nodes.
+30. Graph filters (search with `tag:` and `path:`, tags, attachments, existing files only, orphans) and forces change the view and survive a restart in `.engram-notes/graph.json`.
+31. Open local graph follows the note last active and its depth slider reaches three links.
+32. Create new base, add a filter in its source, switch back to the table: rows match, a header click sorts and writes `sort`, a cell edit rewrites the note's frontmatter.
+33. A base using `file.ctime` lists it as unsupported and shows no rows.
+34. `cargo test --workspace` and `pnpm check && pnpm test` pass.
