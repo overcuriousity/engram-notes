@@ -88,6 +88,24 @@ impl Vault {
         Ok(out)
     }
 
+    /// Folders below the root, hidden ones skipped, so empty folders can be shown.
+    pub fn folders(&self) -> Result<Vec<String>> {
+        let mut out = Vec::new();
+        let walker = walkdir::WalkDir::new(&self.root)
+            .min_depth(1)
+            .into_iter()
+            .filter_entry(|e| !is_hidden(e.file_name()));
+        for entry in walker {
+            let entry = entry.map_err(|e| Error::io(&self.root, e.into()))?;
+            if entry.file_type().is_dir() {
+                let rel = entry.path().strip_prefix(&self.root).unwrap();
+                out.push(rel.to_string_lossy().replace('\\', "/"));
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+
     pub fn stat(&self, rel: &str) -> Result<Option<FileEntry>> {
         let abs = self.abs(rel);
         match fs::metadata(&abs) {
@@ -197,6 +215,15 @@ mod tests {
                 ("pic.png".into(), false)
             ]
         );
+    }
+
+    #[test]
+    fn folders_include_empty_and_skip_hidden() {
+        let (d, v) = tmp();
+        fs::create_dir_all(d.path().join("a/b")).unwrap();
+        fs::create_dir_all(d.path().join(".git/x")).unwrap();
+        fs::create_dir_all(d.path().join("empty")).unwrap();
+        assert_eq!(v.folders().unwrap(), vec!["a", "a/b", "empty"]);
     }
 
     #[test]

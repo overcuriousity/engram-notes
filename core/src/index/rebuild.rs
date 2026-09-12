@@ -116,9 +116,13 @@ impl Index {
         Ok(true)
     }
 
+    /// Drops `rel`, or every note below it when it names a folder.
     pub fn remove_file(&mut self, rel: &str) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM notes WHERE path=?1", [rel])?;
+        let dir = format!("{}/", rel.trim_end_matches('/'));
+        self.conn.execute(
+            "DELETE FROM notes WHERE path=?1 OR substr(path, 1, length(?2))=?2",
+            params![rel, dir],
+        )?;
         self.resolve_all()
     }
 }
@@ -276,6 +280,15 @@ mod tests {
         );
         fs::remove_file(d.path().join("A.md")).unwrap();
         assert!(ix.update_file(&v, "A.md").unwrap());
+        assert_eq!(count(&ix, "SELECT count(*) FROM notes"), 1);
+    }
+
+    #[test]
+    fn remove_file_drops_a_whole_folder() {
+        let (_d, v) = vault();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        ix.remove_file("sub").unwrap();
         assert_eq!(count(&ix, "SELECT count(*) FROM notes"), 1);
     }
 

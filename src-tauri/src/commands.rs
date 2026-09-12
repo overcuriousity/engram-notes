@@ -229,7 +229,9 @@ pub fn delete_file(state: State<AppState>, path: String) -> CmdResult<()> {
 #[tauri::command]
 pub fn plan_rename(state: State<AppState>, from: String, to: String) -> CmdResult<RenamePlan> {
     with_open(&state, |o| {
-        Ok(engram_core::rename::plan_rename(&o.index, &from, &to)?)
+        Ok(engram_core::rename::plan_rename(
+            &o.vault, &o.index, &from, &to,
+        )?)
     })
 }
 
