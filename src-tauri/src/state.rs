@@ -8,7 +8,8 @@ pub struct Open {
     pub vault: Vault,
     pub index: Index,
     pub config: AppConfig,
-    pub watcher: Option<Watcher>,
+    // Held so the watch thread lives as long as the vault is open.
+    pub _watcher: Option<Watcher>,
 }
 
 #[derive(Default)]

@@ -77,7 +77,7 @@ pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdRe
         vault,
         index,
         config: cfg.clone(),
-        watcher,
+        _watcher: watcher,
     });
     Ok(VaultInfo {
         root,
