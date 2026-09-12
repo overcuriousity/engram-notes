@@ -1,0 +1,41 @@
+import { app } from "./state.svelte";
+import { dailyNote, createNote } from "./api";
+
+export interface Command { id: string; name: string; hotkey: string; run: () => void | Promise<void> }
+
+export async function newNote(dir = "") {
+  const prefix = dir ? `${dir}/` : "";
+  let n = `${prefix}Untitled.md`;
+  for (let i = 1; app.files.some((f) => f.path === n); i++) n = `${prefix}Untitled ${i}.md`;
+  await createNote(n);
+  await app.refresh();
+  await app.openNote(n);
+}
+
+export const defaults: Command[] = [
+  { id: "palette", name: "Open command palette", hotkey: "Ctrl+P", run: () => (app.palette = "commands") },
+  { id: "switcher", name: "Quick switcher", hotkey: "Ctrl+O", run: () => (app.palette = "files") },
+  { id: "search", name: "Search in all files", hotkey: "Ctrl+Shift+F", run: () => { app.leftPane = "search"; app.showLeft = true; } },
+  { id: "new-note", name: "New note", hotkey: "Ctrl+N", run: () => newNote() },
+  { id: "daily", name: "Open today's daily note", hotkey: "Ctrl+D", run: async () => { const p = await dailyNote(); await app.refresh(); await app.openNote(p); } },
+  { id: "close-tab", name: "Close current tab", hotkey: "Ctrl+W", run: () => { if (app.active >= 0) app.closeTab(app.active); } },
+  { id: "toggle-mode", name: "Toggle live preview / source", hotkey: "Ctrl+E", run: () => { const t = app.activeTab; if (t) t.mode = t.mode === "source" ? "live" : "source"; } },
+  { id: "toggle-reading", name: "Toggle reading view", hotkey: "Ctrl+Shift+E", run: () => { const t = app.activeTab; if (t) t.mode = t.mode === "reading" ? "live" : "reading"; } },
+  { id: "toggle-left", name: "Toggle left sidebar", hotkey: "Ctrl+Shift+L", run: () => (app.showLeft = !app.showLeft) },
+  { id: "toggle-right", name: "Toggle right sidebar", hotkey: "Ctrl+Shift+R", run: () => (app.showRight = !app.showRight) },
+  { id: "save", name: "Save", hotkey: "Ctrl+S", run: () => { const t = app.activeTab; if (t) return app.save(t); } },
+];
+
+export function allCommands(): Command[] {
+  const over = app.config?.hotkeys ?? {};
+  return defaults.map((c) => ({ ...c, hotkey: over[c.id] ?? c.hotkey }));
+}
+
+export function chord(e: KeyboardEvent): string {
+  const parts: string[] = [];
+  if (e.ctrlKey || e.metaKey) parts.push("Ctrl");
+  if (e.shiftKey) parts.push("Shift");
+  if (e.altKey) parts.push("Alt");
+  parts.push(e.key.length === 1 ? e.key.toUpperCase() : e.key);
+  return parts.join("+");
+}
