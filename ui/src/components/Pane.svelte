@@ -5,6 +5,7 @@
   import NoteView from "./NoteView.svelte";
   import FileView from "./FileView.svelte";
   import GraphView from "./GraphView.svelte";
+  import BaseView from "./BaseView.svelte";
   import { fileKind } from "../lib/files";
 
   let { pane }: { pane: Pane } = $props();
@@ -27,6 +28,8 @@
         <NoteView paneId={pane.id} path={tab.path} />
       {:else if kind === "graph"}
         <GraphView local={tab.path === "graph:local"} />
+      {:else if kind === "base"}
+        <BaseView path={tab.path} />
       {:else}
         <FileView path={tab.path} />
       {/if}

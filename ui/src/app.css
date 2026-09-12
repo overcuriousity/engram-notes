@@ -123,3 +123,22 @@ input[type="checkbox"]:checked { border-color: var(--accent); background: var(--
 .graph-controls label.slider { flex-direction: column; align-items: stretch; gap: 0; }
 .graph-controls input:not([type]) { width: 100%; }
 .graph-controls input[type="range"] { accent-color: var(--accent); border: none; padding: 0; }
+.base { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.base .modes { align-items: center; }
+.base select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 4px; margin-left: 8px; }
+.base-view { margin-left: 8px; color: var(--fg); }
+.base-count { margin-left: 8px; color: var(--fg-muted); }
+.base-errors { background: var(--mark); padding: 6px 12px; font-size: 13px; }
+.base-scroll { flex: 1; overflow: auto; }
+.base table { border-collapse: collapse; min-width: 100%; font-size: 13px; }
+.base th { position: sticky; top: 0; z-index: 1; background: var(--bg-2); text-align: left; font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.base th button { width: 100%; text-align: left; padding: 6px 10px; color: var(--fg-muted); }
+.base th button:hover { color: var(--fg); }
+.base td { border-bottom: 1px solid var(--border); padding: 3px 10px; vertical-align: middle; min-width: 120px; max-width: 360px; }
+.base td input:not([type="checkbox"]) { width: 100%; border-color: transparent; background: transparent; padding: 2px 4px; }
+.base td input:not([type="checkbox"]):hover, .base td input:not([type="checkbox"]):focus { border-color: var(--border); }
+.base-link { color: var(--accent); text-align: left; padding: 2px 0; }
+.base-link:hover { text-decoration: underline; }
+.base-source { flex: 1; min-height: 0; overflow: auto; }
+.yaml { height: 100%; }
+.yaml .cm-editor .cm-content { font-family: var(--font-mono); font-size: 14px; }
