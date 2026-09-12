@@ -17,6 +17,7 @@ pub enum LinkKind {
 pub struct Link {
     pub target: String,
     pub heading: Option<String>,
+    pub block: Option<String>,
     pub alias: Option<String>,
     pub kind: LinkKind,
     pub line: u32,
@@ -40,6 +41,13 @@ pub struct ParsedNote {
     pub links: Vec<Link>,
     pub tags: Vec<String>,
     pub headings: Vec<Heading>,
+    pub blocks: Vec<Block>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Block {
+    pub id: String,
+    pub line: u32,
 }
 
 static WIKILINK: LazyLock<Regex> = LazyLock::new(|| {
@@ -50,6 +58,10 @@ static WIKILINK: LazyLock<Regex> = LazyLock::new(|| {
 static TAG: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?:^|[\s(])#([\p{L}\p{N}_/\-]*[\p{L}_/\-][\p{L}\p{N}_/\-]*)").unwrap()
 });
+
+// Obsidian's block id: `^id` ending a line, after a space or alone on it.
+static BLOCK_ID: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)(?:^|[ \t])\^([A-Za-z0-9-]+)[ \t\r]*$").unwrap());
 
 pub fn parse(source: &str) -> ParsedNote {
     let (frontmatter, body_offset) = split_frontmatter(source);
@@ -68,12 +80,19 @@ pub fn parse(source: &str) -> ParsedNote {
         if in_ranges(start, &code_ranges) {
             continue;
         }
+        let fragment = c
+            .get(3)
+            .map(|h| h.as_str().trim())
+            .filter(|h| !h.is_empty());
+        let (heading, block) = match fragment {
+            Some(f) if f.starts_with('^') => (None, Some(f[1..].to_owned())),
+            Some(f) => (Some(f.to_owned()), None),
+            None => (None, None),
+        };
         links.push(Link {
             target: c[2].trim().to_owned(),
-            heading: c
-                .get(3)
-                .map(|h| h.as_str().trim().to_owned())
-                .filter(|h| !h.is_empty()),
+            heading,
+            block,
             alias: c
                 .get(4)
                 .map(|a| a.as_str().trim().to_owned())
@@ -116,6 +135,17 @@ pub fn parse(source: &str) -> ParsedNote {
         }
     }
 
+    let blocks = BLOCK_ID
+        .captures_iter(body)
+        .map(|c| c.get(1).unwrap())
+        .map(|m| (body_offset + m.start(), m.as_str()))
+        .filter(|(pos, _)| !in_ranges(*pos, &code_ranges))
+        .map(|(pos, id)| Block {
+            id: id.to_owned(),
+            line: line_of(source, pos),
+        })
+        .collect();
+
     ParsedNote {
         title,
         frontmatter,
@@ -124,6 +154,7 @@ pub fn parse(source: &str) -> ParsedNote {
         links,
         tags: tags.into_iter().collect(),
         headings,
+        blocks,
     }
 }
 
@@ -206,6 +237,7 @@ fn walk_markdown(body: &str, body_offset: usize, source: &str) -> Walked {
                     links.push(Link {
                         target: percent_decode(&dest),
                         heading: None,
+                        block: None,
                         alias: None,
                         kind: LinkKind::Markdown,
                         line: line_of(source, start),
@@ -345,5 +377,17 @@ mod tests {
     fn line_numbers_count_frontmatter() {
         let n = parse("---\na: 1\n---\n\n[[L]]");
         assert_eq!(n.links[0].line, 5);
+    }
+
+    #[test]
+    fn block_links_and_block_ids() {
+        let src = "[[Note#^abc]] [[Note#Sec]]\n\nA paragraph ^para-1\n\n- item ^li\n```\nx ^fenced\n```\nnot^inword";
+        let n = parse(src);
+        assert_eq!(n.links[0].block.as_deref(), Some("abc"));
+        assert_eq!(n.links[0].heading, None);
+        assert_eq!(n.links[1].heading.as_deref(), Some("Sec"));
+        assert_eq!(n.links[1].block, None);
+        let b: Vec<_> = n.blocks.iter().map(|b| (b.id.as_str(), b.line)).collect();
+        assert_eq!(b, vec![("para-1", 3), ("li", 5)]);
     }
 }

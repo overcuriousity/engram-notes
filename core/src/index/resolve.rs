@@ -148,6 +148,27 @@ mod tests {
     }
 
     #[test]
+    fn block_links_are_stored_and_anchors_found() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(
+            d.path().join("T.md"),
+            "---\na: 1\n---\n# Intro\ntext ^b1\n## Deep Part\n",
+        )
+        .unwrap();
+        fs::write(d.path().join("S.md"), "[[T#^b1]]").unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        let out = ix.outgoing("S.md").unwrap();
+        assert_eq!(out[0].block.as_deref(), Some("b1"));
+        assert_eq!(out[0].heading, None);
+        assert_eq!(ix.anchor_line("T.md", "^b1").unwrap(), Some(5));
+        assert_eq!(ix.anchor_line("T.md", "deep part").unwrap(), Some(6));
+        assert_eq!(ix.anchor_line("T.md", "Intro#Deep Part").unwrap(), Some(6));
+        assert_eq!(ix.anchor_line("T.md", "^nope").unwrap(), None);
+    }
+
+    #[test]
     fn summaries_tags_properties_titles() {
         let d = tempfile::tempdir().unwrap();
         fs::write(

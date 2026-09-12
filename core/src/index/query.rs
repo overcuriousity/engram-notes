@@ -17,6 +17,7 @@ pub struct LinkRow {
     pub target_path: Option<String>,
     pub kind: String,
     pub heading: Option<String>,
+    pub block: Option<String>,
     pub alias: Option<String>,
     pub line: u32,
     pub context: String,
@@ -34,7 +35,7 @@ pub struct TagCount {
     pub count: i64,
 }
 
-const LINK_COLUMNS: &str = "l.src_path, l.target_raw, l.target_path, l.kind, l.heading, l.alias, l.line, n.body, n.body_line";
+const LINK_COLUMNS: &str = "l.src_path, l.target_raw, l.target_path, l.kind, l.heading, l.alias, l.line, n.body, n.body_line, l.block";
 
 // The index stores the body without its frontmatter and the line the body
 // starts on, so a link's source line maps onto a body line by subtraction.
@@ -53,6 +54,7 @@ fn link_row(r: &rusqlite::Row) -> rusqlite::Result<LinkRow> {
         target_path: r.get(2)?,
         kind: r.get(3)?,
         heading: r.get(4)?,
+        block: r.get(9)?,
         alias: r.get(5)?,
         line,
         context: context_line(&body, line, body_line),
@@ -150,6 +152,25 @@ impl Index {
             .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
             .and_then(|v| v.as_object().cloned())
             .unwrap_or_default())
+    }
+
+    /// The source line a `heading` or `^block` fragment points at in `path`.
+    pub fn anchor_line(&self, path: &str, fragment: &str) -> Result<Option<u32>> {
+        let (sql, key) = match fragment.strip_prefix('^') {
+            Some(id) => (
+                "SELECT line FROM blocks WHERE path=?1 AND lower(id)=lower(?2) LIMIT 1",
+                id,
+            ),
+            // `[[Note#A#B]]` names heading B under A; the last part finds it.
+            None => (
+                "SELECT line FROM headings WHERE path=?1 AND lower(text)=lower(?2) ORDER BY line LIMIT 1",
+                fragment.rsplit('#').next().unwrap_or(fragment).trim(),
+            ),
+        };
+        Ok(self
+            .conn
+            .query_row(sql, rusqlite::params![path, key], |r| r.get(0))
+            .optional()?)
     }
 
     pub fn titles(&self) -> Result<Vec<(String, String)>> {

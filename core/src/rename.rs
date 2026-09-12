@@ -83,17 +83,17 @@ pub fn rewrite_links(
         match l.kind {
             LinkKind::Wiki | LinkKind::Embed => {
                 let bang = if l.kind == LinkKind::Embed { "!" } else { "" };
-                let heading = l
-                    .heading
-                    .as_ref()
-                    .map(|h| format!("#{h}"))
-                    .unwrap_or_default();
+                let fragment = match (&l.heading, &l.block) {
+                    (Some(h), _) => format!("#{h}"),
+                    (None, Some(b)) => format!("#^{b}"),
+                    (None, None) => String::new(),
+                };
                 let alias = l
                     .alias
                     .as_ref()
                     .map(|a| format!("|{a}"))
                     .unwrap_or_default();
-                out.push_str(&format!("{bang}[[{new_wiki}{heading}{alias}]]"));
+                out.push_str(&format!("{bang}[[{new_wiki}{fragment}{alias}]]"));
             }
             LinkKind::Markdown => {
                 let open = original.rfind('(').unwrap_or(0);
@@ -127,6 +127,12 @@ mod tests {
     fn rewrite_uses_full_path_when_stem_is_ambiguous() {
         let out = rewrite_links("[[Old]]", "Old.md", "a/Note.md", false);
         assert_eq!(out, "[[a/Note]]");
+    }
+
+    #[test]
+    fn rewrite_keeps_block_fragment() {
+        let out = rewrite_links("[[Old#^b1|see]]", "Old.md", "New.md", true);
+        assert_eq!(out, "[[New#^b1|see]]");
     }
 
     #[test]

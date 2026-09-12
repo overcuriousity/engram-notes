@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS links (
   target_path TEXT,
   kind TEXT NOT NULL,
   heading TEXT,
+  block TEXT,
   alias TEXT,
   line INTEGER NOT NULL,
   start INTEGER NOT NULL,
@@ -54,6 +55,13 @@ CREATE TABLE IF NOT EXISTS headings (
   text TEXT NOT NULL,
   line INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS blocks (
+  path TEXT NOT NULL REFERENCES notes(path) ON DELETE CASCADE,
+  id TEXT NOT NULL,
+  line INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS blocks_path ON blocks(path);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   title, body, path UNINDEXED,

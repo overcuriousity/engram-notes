@@ -148,8 +148,8 @@ fn write_note(
         ],
     )?;
     let mut ins = tx.prepare_cached(
-        "INSERT INTO links(src_path, target_raw, target_path, kind, heading, alias, line, start, \"end\")
-         VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO links(src_path, target_raw, target_path, kind, heading, block, alias, line, start, \"end\")
+         VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     )?;
     for l in &note.links {
         let kind = match l.kind {
@@ -162,6 +162,7 @@ fn write_note(
             l.target,
             kind,
             l.heading,
+            l.block,
             l.alias,
             l.line,
             l.start as i64,
@@ -182,6 +183,10 @@ fn write_note(
         tx.prepare_cached("INSERT INTO headings(path, level, text, line) VALUES (?1, ?2, ?3, ?4)")?;
     for h in &note.headings {
         ins.execute(params![entry.path, h.level, h.text, h.line])?;
+    }
+    let mut ins = tx.prepare_cached("INSERT INTO blocks(path, id, line) VALUES (?1, ?2, ?3)")?;
+    for b in &note.blocks {
+        ins.execute(params![entry.path, b.id, b.line])?;
     }
     Ok(())
 }

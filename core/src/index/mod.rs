@@ -9,7 +9,7 @@ use crate::{Error, Result};
 use rusqlite::Connection;
 use std::path::Path;
 
-pub const SCHEMA_VERSION: &str = "1";
+pub const SCHEMA_VERSION: &str = "2";
 const SCHEMA: &str = include_str!("schema.sql");
 
 pub struct Index {
