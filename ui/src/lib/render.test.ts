@@ -28,4 +28,11 @@ describe("renderMarkdown", () => {
   it("escapes html", () => {
     expect(renderMarkdown("<script>x</script>")).not.toContain("<script>");
   });
+  it("hides block ids and marks source lines", () => {
+    const h = renderMarkdown("# Top\n\nsome text ^abc\n\n- item ^li");
+    expect(h).not.toContain("^abc");
+    expect(h).not.toContain("^li");
+    expect(h).toContain('<h1 data-source-line="0">');
+    expect(h).toContain('<p data-source-line="2">some text</p>');
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayText, findWikilinks } from "./wikilink";
+import { displayText, findWikilinks, linkTarget } from "./wikilink";
 
 describe("findWikilinks", () => {
   it("parses every form with positions", () => {
@@ -15,5 +15,14 @@ describe("findWikilinks", () => {
   it("chooses display text", () => {
     const [a, b, c] = findWikilinks("[[N]] [[N#H]] [[N|A]]");
     expect([displayText(a), displayText(b), displayText(c)]).toEqual(["N", "N › H", "A"]);
+  });
+});
+
+describe("block links", () => {
+  it("separates a block from a heading", () => {
+    const [b, h] = findWikilinks("[[N#^b1]] [[N#H]]");
+    expect([b.block, b.heading]).toEqual(["b1", undefined]);
+    expect([h.block, h.heading]).toEqual([undefined, "H"]);
+    expect([displayText(b), linkTarget(b), linkTarget(h)]).toEqual(["N › ^b1", "N#^b1", "N#H"]);
   });
 });

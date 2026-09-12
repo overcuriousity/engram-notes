@@ -1,5 +1,5 @@
 import MarkdownIt from "markdown-it";
-import { findWikilinks, displayText } from "./wikilink";
+import { findWikilinks, displayText, linkTarget } from "./wikilink";
 
 const md = new MarkdownIt({ html: false, linkify: true });
 
@@ -9,7 +9,7 @@ const escapeAttr = (s: string) => escapeHtml(s).replace(/"/g, "&quot;");
 function wikilinkHtml(raw: string): string {
   const l = findWikilinks(raw)[0];
   if (!l) return escapeHtml(raw);
-  const target = l.heading ? `${l.target}#${l.heading}` : l.target;
+  const target = linkTarget(l);
   if (l.embed && /\.(png|jpe?g|gif|svg|webp)$/i.test(l.target)) {
     return `<img data-embed="${escapeAttr(l.target)}" alt="${escapeAttr(l.target)}">`;
   }
@@ -80,6 +80,23 @@ md.core.ruler.before("inline", "callouts", (state) => {
     open.attrSet("class", `callout callout-${m[1].toLowerCase()}`);
     open.attrSet("data-title", m[2] || m[1]);
     inline.content = inline.content.slice(m[0].length);
+  }
+});
+
+// Obsidian hides `^id` in reading view; the id stays in the file. Runs
+// before `tags`, which turns text tokens holding a tag into html.
+md.core.ruler.before("tags", "block_ids", (state) => {
+  for (const tok of state.tokens) {
+    const kids = tok.type === "inline" ? tok.children : null;
+    const last = kids?.[kids.length - 1];
+    if (last?.type === "text") last.content = last.content.replace(/(^|\s)\^[A-Za-z0-9-]+\s*$/, "");
+  }
+});
+
+// Block elements carry their 0-based source line so a jump can find them.
+md.core.ruler.push("source_lines", (state) => {
+  for (const tok of state.tokens) {
+    if (tok.map && tok.nesting === 1) tok.attrSet("data-source-line", String(tok.map[0]));
   }
 });
 

@@ -1,7 +1,27 @@
 <script lang="ts">
   import { renderMarkdown } from "../lib/render";
-  let { text, onFollow, onToggleTask }: { text: string; onFollow: (t: string) => void; onToggleTask: (line: number) => void } = $props();
+  interface Props {
+    text: string;
+    jump: { line: number } | null;
+    onJumped: () => void;
+    onFollow: (t: string) => void;
+    onToggleTask: (line: number) => void;
+  }
+  let { text, jump, onJumped, onFollow, onToggleTask }: Props = $props();
   const html = $derived(renderMarkdown(text));
+  let host = $state<HTMLDivElement>();
+
+  // Elements come in source order, so the last one starting at or before the line holds it.
+  $effect(() => {
+    if (!host || !jump) return;
+    void html;
+    let best: HTMLElement | undefined;
+    for (const el of host.querySelectorAll<HTMLElement>("[data-source-line]")) {
+      if (Number(el.dataset.sourceLine) <= jump.line - 1) best = el;
+    }
+    best?.scrollIntoView({ block: "start" });
+    onJumped();
+  });
 
   function onClick(e: MouseEvent) {
     const el = e.target as HTMLElement;
@@ -16,7 +36,7 @@
 </script>
 
 <!-- markdown-it runs with html disabled; only our own tags reach here -->
-<div class="reading" onclick={onClick} role="presentation">{@html html}</div>
+<div class="reading" bind:this={host} onclick={onClick} role="presentation">{@html html}</div>
 
 <style>
   .reading { max-width: 760px; margin: 0 auto; padding: 24px 32px; font-family: var(--font-text); font-size: 16px; }

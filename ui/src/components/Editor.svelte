@@ -16,15 +16,18 @@
     text: string;
     mode: "live" | "source";
     focus: boolean;
+    jump: { line: number } | null;
+    onJumped: () => void;
     onchange: (t: string) => void;
     onblur: () => void;
     onFollow: (target: string) => void;
     titles: () => [string, string][];
     tags: () => string[];
   }
-  let { text, mode, focus, onchange, onblur, onFollow, titles, tags }: Props = $props();
+  let { text, mode, focus, jump, onJumped, onchange, onblur, onFollow, titles, tags }: Props = $props();
   let host: HTMLDivElement;
-  let view: EditorView | undefined;
+  // State, so effects that need the view run again once it exists.
+  let view = $state.raw<EditorView>();
   const modeComp = new Compartment();
   const forMode = (m: string) => (m === "live" ? livePreview({ onFollow }) : []);
 
@@ -78,6 +81,15 @@
     if (text !== current) {
       view.dispatch({ changes: textDiff(current, text), annotations: Transaction.addToHistory.of(false) });
     }
+  });
+
+  $effect(() => {
+    if (!view || !jump) return;
+    const doc = view.state.doc;
+    const line = doc.line(Math.min(Math.max(jump.line, 1), doc.lines));
+    view.dispatch({ selection: { anchor: line.from }, effects: EditorView.scrollIntoView(line.from, { y: "start", yMargin: 24 }) });
+    view.focus();
+    onJumped();
   });
 </script>
 

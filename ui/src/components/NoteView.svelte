@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { app } from "../lib/state.svelte";
   import { findPane } from "../lib/layout";
-  import { resolveLink, createNote, tags as apiTags, errorMessage } from "../lib/api";
+  import { resolveLink, createNote, anchorLine, tags as apiTags, errorMessage } from "../lib/api";
   import Editor from "./Editor.svelte";
   import Reading from "./Reading.svelte";
 
@@ -10,6 +10,8 @@
   // Read from the store so edits mutate state the store owns.
   const doc = $derived(app.docs[path]);
   const mode = $derived(findPane(app.layout, paneId)?.tabs.find((t) => t.path === path)?.mode ?? "live");
+  const jump = $derived(app.jump && app.jump.pane === paneId && app.jump.path === path ? app.jump : null);
+  const jumped = () => (app.jump = null);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let tagList = $state<string[]>([]);
   onMount(async () => {
@@ -26,7 +28,9 @@
   }
 
   async function follow(target: string) {
-    const [name] = target.split("#");
+    const hash = target.indexOf("#");
+    const name = hash < 0 ? target : target.slice(0, hash);
+    const fragment = hash < 0 ? "" : target.slice(hash + 1);
     try {
       let found = await resolveLink(name);
       if (!found) {
@@ -34,7 +38,8 @@
         await createNote(found);
         await app.refresh();
       }
-      await app.openNote(found);
+      const line = fragment ? await anchorLine(found, fragment) : null;
+      await app.openNote(found, line ?? undefined);
     } catch (e) {
       app.say(errorMessage(e));
     }
@@ -65,12 +70,14 @@
   </div>
   <div class="note">
     {#if mode === "reading"}
-      <Reading text={doc.text} onFollow={follow} onToggleTask={toggleTask} />
+      <Reading text={doc.text} {jump} onJumped={jumped} onFollow={follow} onToggleTask={toggleTask} />
     {:else}
       <Editor
         text={doc.text}
         {mode}
         focus={app.activePane === paneId}
+        {jump}
+        onJumped={jumped}
         onchange={onChange}
         onblur={() => app.save(doc)}
         onFollow={follow}

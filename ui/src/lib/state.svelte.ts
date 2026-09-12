@@ -27,6 +27,7 @@ class AppStateStore {
   palette = $state<"none" | "files" | "commands">("none");
   leftPane = $state<"files" | "search">("files");
   watching = $state(true);
+  jump = $state<{ pane: number; path: string; line: number } | null>(null);
   private nextId = 2;
 
   get pane(): Pane {
@@ -103,15 +104,19 @@ class AppStateStore {
     this.docs[path] = { path, text: n.text, savedText: n.text, mtime_ms: n.mtime_ms, conflict: false };
   }
 
-  /** Opens `path` in the active pane, or activates its tab there. */
-  async openNote(path: string) {
+  /** Opens `path` in the active pane, or activates its tab there; `line` scrolls to a 1-based line. */
+  async openNote(path: string, line?: number) {
     const p = this.pane;
     const i = p.tabs.findIndex((t) => t.path === path);
-    if (i >= 0) return this.activate(p.id, i);
-    if (fileKind(path) === "note") await this.load(path);
-    p.tabs.push({ path, mode: this.config?.editor.default_mode ?? "live" });
-    p.active = p.tabs.length - 1;
-    this.persist();
+    if (i >= 0) {
+      this.activate(p.id, i);
+    } else {
+      if (fileKind(path) === "note") await this.load(path);
+      p.tabs.push({ path, mode: this.config?.editor.default_mode ?? "live" });
+      p.active = p.tabs.length - 1;
+      this.persist();
+    }
+    if (line) this.jump = { pane: p.id, path, line };
   }
 
   activate(paneId: number, index: number) {
