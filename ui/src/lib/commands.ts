@@ -27,6 +27,8 @@ export const defaults: Command[] = [
   { id: "search", name: "Search in all files", hotkey: "Ctrl+Shift+F", run: () => { app.leftPane = "search"; app.showLeft = true; } },
   { id: "new-note", name: "New note", hotkey: "Ctrl+N", run: () => newNote() },
   { id: "new-base", name: "Create new base", hotkey: "", run: () => newBase() },
+  { id: "graph", name: "Open graph view", hotkey: "Ctrl+G", run: () => app.openNote("graph:global") },
+  { id: "local-graph", name: "Open local graph", hotkey: "", run: () => app.openNote("graph:local") },
   { id: "daily", name: "Open today's daily note", hotkey: "Ctrl+D", run: async () => { const p = await dailyNote(); await app.refresh(); await app.openNote(p); } },
   { id: "close-tab", name: "Close current tab", hotkey: "Ctrl+W", run: () => { const p = app.pane; if (p.active >= 0) app.closeTab(p.id, p.active); } },
   { id: "toggle-mode", name: "Toggle live preview / source", hotkey: "Ctrl+E", run: () => { const t = app.activeTab; if (t) app.setMode(app.pane.id, t.path, t.mode === "source" ? "live" : "source"); } },

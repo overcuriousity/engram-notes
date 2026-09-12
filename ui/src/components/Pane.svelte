@@ -4,10 +4,12 @@
   import Tabs from "./Tabs.svelte";
   import NoteView from "./NoteView.svelte";
   import FileView from "./FileView.svelte";
+  import GraphView from "./GraphView.svelte";
   import { fileKind } from "../lib/files";
 
   let { pane }: { pane: Pane } = $props();
   const tab = $derived(pane.active >= 0 ? pane.tabs[pane.active] : null);
+  const kind = $derived(tab ? fileKind(tab.path) : "other");
 </script>
 
 <!-- Pointer and focus only mark the active pane; the controls inside stay reachable. -->
@@ -21,8 +23,10 @@
   <Tabs {pane} />
   {#if tab}
     {#key tab.path}
-      {#if fileKind(tab.path) === "note"}
+      {#if kind === "note"}
         <NoteView paneId={pane.id} path={tab.path} />
+      {:else if kind === "graph"}
+        <GraphView local={tab.path === "graph:local"} />
       {:else}
         <FileView path={tab.path} />
       {/if}

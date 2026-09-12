@@ -3485,12 +3485,12 @@ export function radius(n: ViewNode, s: GraphSettings): number {
 
 /** Obsidian's slider values in d3-force units, scaled so the defaults space a vault comfortably. */
 export function forces(s: GraphSettings) {
-  return { center: s.centerStrength * 0.1, charge: -s.repelStrength * 20, link: s.linkStrength, distance: s.linkDistance / 8 };
+  return { center: s.centerStrength * 0.1, charge: -s.repelStrength * 20, link: s.linkStrength, distance: s.linkDistance / 5 };
 }
 
 /** Labels fade in as the view zooms; the text fade slider moves the threshold. */
 export function labelAlpha(scale: number, fade: number): number {
-  return Math.min(1, Math.max(0, (scale - 0.9 + fade * 0.2) * 3));
+  return Math.min(1, Math.max(0, (scale - 0.8 + fade * 0.2) * 3));
 }
 ```
 
@@ -3656,7 +3656,7 @@ In `ui/src/components/Pane.svelte` import `GraphView`, add `const kind = $derive
     links = g.edges.map((e) => ({ source: byId.get(e.source)!, target: byId.get(e.target)! }));
     const degree = new Map<Node, number>();
     for (const l of links) for (const n of [l.source, l.target]) degree.set(n, (degree.get(n) ?? 0) + 1);
-    if (old.size === 0) view.k = Math.min(1, Math.max(0.15, Math.sqrt(60 / Math.max(1, nodes.length))));
+    if (old.size === 0) view.k = Math.min(1.5, Math.max(0.15, Math.sqrt(30 / Math.max(1, nodes.length))));
     const f = forces(s);
     sim?.stop();
     sim = forceSimulation(nodes)
@@ -3885,7 +3885,9 @@ In `ui/src/components/Pane.svelte` import `GraphView`, add `const kind = $derive
   ></canvas>
   {#if local && !center}<div class="graph-empty">Open a note to see its local graph</div>{/if}
   <div class="graph-controls" class:open={panel}>
-    <button class="graph-toggle" title="Graph settings" onclick={() => (panel = !panel)}>{panel ? "×" : "⚙"}</button>
+    <button class="graph-toggle" title="Graph settings" onclick={() => (panel = !panel)}>
+      {#if panel}×{:else}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>{/if}
+    </button>
     {#if panel}
       <h4>Filters</h4>
       <input placeholder="Search files…" bind:value={settings.search} />
