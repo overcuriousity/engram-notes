@@ -105,3 +105,24 @@ The graph draws associations and the top-k nearest notes as dashed edges,
 thicker where the tie is stronger, and never twice over a pair an explicit link
 already draws. Off by default in the global graph, on in the local one; each
 graph keeps its own switch in `graph.json`.
+
+## Where search lives
+
+The spec's *Layout* line puts search in the left sidebar. It is reached by
+Ctrl+K and by the ribbon's magnifier instead, on the same modal as the command
+palette and the quick switcher, so the three behave alike; the sidebar holds
+the file explorer alone and hands its actions to the header band, as Obsidian
+does with a single-view sidebar. Nothing about what search *does* changed.
+
+## The graph's renderer
+
+Obsidian draws its graph with WebGL — `pixi.min.js` ships inside
+`obsidian.asar`. Ours is a 2D canvas, which the spec does not speak to. Rather
+than match the renderer, the roughness the user saw was traced to four things
+and each was fixed: a hit target smaller than the node (`hitRadius`, at least
+ten screen pixels), a guessed opening zoom that left the layout a knot
+(`fitView`, run once the simulation settles), a zoom that jumped a whole notch
+per wheel event (eased over frames toward a target), and no way to send a node
+to the other split (Ctrl-click, through `openInOtherPane`). **A small graph
+still leaves margin around itself: `fitView` caps the zoom at 2 so six notes do
+not blow up to fill a pane.**
