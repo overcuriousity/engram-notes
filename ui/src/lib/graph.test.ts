@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Graph } from "./api";
-import { DEFAULTS, filterGraph, labelAlpha, parseSearch, readSettings, searchWords, type GraphSettings, type ViewGraph } from "./graph";
+import { DEFAULTS, filterGraph, labelAlpha, parseSearch, radius, readSettings, searchWords, type GraphSettings, type ViewGraph } from "./graph";
 
 const g: Graph = {
   nodes: [
@@ -73,9 +73,19 @@ describe("graph filters", () => {
     expect(r.repelStrength).toBe(10);
   });
 
-  it("fades labels in as the view zooms", () => {
-    expect(labelAlpha(0.5, 0)).toBe(0);
-    expect(labelAlpha(2, 0)).toBe(1);
-    expect(labelAlpha(1, 3)).toBe(1);
+  it("draws small nodes that grow slowly with links", () => {
+    const n = (inbound: number) => ({ id: "a", title: "a", kind: "note" as const, tags: [], inbound });
+    expect(radius(n(0), DEFAULTS)).toBeCloseTo(2.5);
+    expect(radius(n(4), DEFAULTS)).toBeCloseTo(5.5);
+    // A hub is bigger, not enormous.
+    expect(radius(n(100), DEFAULTS)).toBeCloseTo(17.5);
+  });
+
+  it("keeps labels hidden until the view is zoomed in", () => {
+    expect(labelAlpha(1.0, 0)).toBe(0);
+    expect(labelAlpha(1.1, 0)).toBe(0);
+    expect(labelAlpha(1.35, 0)).toBe(1);
+    // The slider still moves the threshold.
+    expect(labelAlpha(1.0, 3)).toBeGreaterThan(0);
   });
 });

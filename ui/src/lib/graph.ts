@@ -152,9 +152,9 @@ export function filterGraph(
   return { nodes, edges };
 }
 
-/** Obsidian sizes a node by its links. */
+/** Obsidian's nodes are small and grow slowly; a hub is bigger, not enormous. */
 export function radius(n: ViewNode, s: GraphSettings): number {
-  return (4 + Math.sqrt(n.inbound) * 2) * s.nodeSizeMultiplier;
+  return (2.5 + Math.sqrt(n.inbound) * 1.5) * s.nodeSizeMultiplier;
 }
 
 /** Obsidian's slider values in d3-force units, scaled so the defaults space a vault comfortably. */
@@ -162,7 +162,7 @@ export function forces(s: GraphSettings) {
   return { center: s.centerStrength * 0.1, charge: -s.repelStrength * 20, link: s.linkStrength, distance: s.linkDistance / 5 };
 }
 
-/** Labels fade in as the view zooms; the text fade slider moves the threshold. */
+/** Labels stay off until the view is zoomed in, as Obsidian's do. */
 export function labelAlpha(scale: number, fade: number): number {
-  return Math.min(1, Math.max(0, (scale - 0.8 + fade * 0.2) * 3));
+  return Math.min(1, Math.max(0, (scale - 1.1 + fade * 0.05) * 4));
 }
