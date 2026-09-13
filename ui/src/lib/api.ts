@@ -8,6 +8,13 @@ export interface AppConfig {
   daily_notes: { folder: string; template: string | null; format: string };
   hotkeys: Record<string, string>;
   theme: "system" | "light" | "dark";
+  search: { candidate_multiplier: number; rrf_k: number; cliff_factor: number; cliff_min_share: number };
+  memory: {
+    enabled: boolean; activation_half_life_days: number; assoc_half_life_days: number;
+    sitting_gap_secs: number; assoc_window_secs: number; assoc_show: number;
+    prime_margin: number; prime_lift: number; spread_max: number;
+  };
+  embed: { model_dir: string | null; batch: number };
 }
 export interface VaultInfo { root: string; config: AppConfig; stats: RebuildStats; index_recreated: boolean; watch_error: string | null }
 export interface NoteText { path: string; text: string; mtime_ms: number }

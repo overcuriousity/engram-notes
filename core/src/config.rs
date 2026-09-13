@@ -39,11 +39,85 @@ impl Default for DailyNotes {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
+pub struct SearchConfig {
+    /// Each branch fetches `limit * multiplier` candidates before fusing.
+    pub candidate_multiplier: usize,
+    pub rrf_k: f64,
+    pub cliff_factor: f32,
+    pub cliff_min_share: f32,
+}
+
+impl Default for SearchConfig {
+    fn default() -> Self {
+        SearchConfig {
+            candidate_multiplier: 3,
+            rrf_k: crate::search::fuse::RRF_K,
+            cliff_factor: crate::search::fuse::CLIFF_FACTOR,
+            cliff_min_share: crate::search::fuse::CLIFF_MIN_SHARE,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct MemoryConfig {
+    pub enabled: bool,
+    pub activation_half_life_days: f64,
+    pub assoc_half_life_days: f64,
+    /// Silence longer than this starts a new sitting.
+    pub sitting_gap_secs: i64,
+    /// Two notes reached this far apart in one sitting are associated.
+    pub assoc_window_secs: i64,
+    /// A link shows once its decayed strength reaches this.
+    pub assoc_show: f64,
+    pub prime_margin: f64,
+    pub prime_lift: usize,
+    pub spread_max: usize,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        MemoryConfig {
+            enabled: true,
+            activation_half_life_days: 30.0,
+            assoc_half_life_days: 90.0,
+            sitting_gap_secs: 1800,
+            assoc_window_secs: 600,
+            assoc_show: 2.0,
+            prime_margin: 0.5,
+            prime_lift: 2,
+            spread_max: 3,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct EmbedConfig {
+    /// A folder with the ONNX file and tokenizer, for machines with no network.
+    pub model_dir: Option<String>,
+    pub batch: usize,
+}
+
+impl Default for EmbedConfig {
+    fn default() -> Self {
+        EmbedConfig {
+            model_dir: None,
+            batch: 32,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct AppConfig {
     pub editor: EditorConfig,
     pub daily_notes: DailyNotes,
     pub hotkeys: BTreeMap<String, String>,
     pub theme: String,
+    pub search: SearchConfig,
+    pub memory: MemoryConfig,
+    pub embed: EmbedConfig,
 }
 
 impl Default for AppConfig {
@@ -53,6 +127,9 @@ impl Default for AppConfig {
             daily_notes: DailyNotes::default(),
             hotkeys: BTreeMap::new(),
             theme: "system".into(),
+            search: SearchConfig::default(),
+            memory: MemoryConfig::default(),
+            embed: EmbedConfig::default(),
         }
     }
 }
@@ -192,5 +269,36 @@ mod tests {
         let p = index_path(&v).unwrap();
         assert!(p.ends_with("index.db"));
         assert!(p.to_string_lossy().contains("engram-notes"));
+    }
+
+    #[test]
+    fn search_and_memory_defaults_are_the_shipped_numbers() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.search.candidate_multiplier, 3);
+        assert_eq!(cfg.search.rrf_k, 60.0);
+        assert_eq!(cfg.search.cliff_factor, 3.0);
+        assert!(cfg.memory.enabled);
+        assert_eq!(cfg.memory.activation_half_life_days, 30.0);
+        assert_eq!(cfg.memory.assoc_half_life_days, 90.0);
+        assert_eq!(cfg.memory.sitting_gap_secs, 1800);
+        assert_eq!(cfg.memory.prime_lift, 2);
+        assert_eq!(cfg.memory.spread_max, 3);
+        assert_eq!(cfg.embed.batch, 32);
+        assert_eq!(cfg.embed.model_dir, None);
+    }
+
+    #[test]
+    fn an_old_app_json_gains_the_new_sections() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        std::fs::write(
+            d.path().join(".engram-notes/app.json"),
+            r#"{"theme":"dark","memory":{"enabled":false}}"#,
+        )
+        .unwrap();
+        let cfg = load_config(&v).unwrap();
+        assert!(!cfg.memory.enabled);
+        assert_eq!(cfg.memory.spread_max, 3);
+        assert_eq!(cfg.search.rrf_k, 60.0);
     }
 }
