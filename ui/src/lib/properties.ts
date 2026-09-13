@@ -34,3 +34,23 @@ export function addItem(list: unknown[], raw: string): unknown[] {
 export function removeItem(list: unknown[], index: number): unknown[] {
   return list.filter((_, i) => i !== index);
 }
+
+export type PropIcon =
+  | "text" | "binary" | "calendar" | "clock" | "check-square" | "list" | "tags" | "forward";
+
+const BY_KIND: Record<PropKind, PropIcon> = {
+  text: "text",
+  number: "binary",
+  date: "calendar",
+  datetime: "clock",
+  checkbox: "check-square",
+  list: "list",
+};
+
+// Obsidian's widget registry keys these two by name, whatever the value holds.
+const BY_KEY: Record<string, PropIcon> = { tags: "tags", aliases: "forward" };
+
+/** The Lucide icon Obsidian puts on a property row. */
+export function propIcon(key: string, value: unknown): PropIcon {
+  return BY_KEY[key] ?? BY_KIND[propKind(value)];
+}

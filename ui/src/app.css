@@ -89,7 +89,9 @@ mark { background: var(--mark); color: inherit; }
 .linkrow .src { font-weight: 500; }
 .linkrow .ctx { color: var(--fg-muted); font-size: var(--font-ui-smaller); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .props { padding: 4px 12px; display: grid; grid-template-columns: minmax(60px, 35%) minmax(0, 1fr) auto; gap: 3px 8px; font-size: var(--font-ui-small); align-items: center; }
-.props .key { color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.props .key { display: flex; align-items: center; gap: 6px; color: var(--fg-muted); min-width: 0; }
+.props .key > svg { flex: none; opacity: .85; }
+.props .kname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .props input { padding: 2px 6px; min-width: 0; width: 100%; }
 .props input[type="checkbox"] { justify-self: start; width: 14px; padding: 0; }
 .props .remove { color: var(--fg-muted); }
@@ -184,9 +186,12 @@ select option { background: var(--bg); color: var(--fg); }
 .chip:hover { color: var(--fg); background: var(--bg-3); }
 
 /* Obsidian's Properties view: in the note's flow, the same column as its text. */
-.propblock { max-width: 760px; margin: 0 auto; padding: 20px 32px 6px; font-size: var(--font-ui-small); }
-.propblock .prow { display: grid; grid-template-columns: minmax(80px, 26%) minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 2px 0; }
-.propblock .key { color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.propblock { max-width: 760px; margin: 0 auto; padding: 8px 32px 2rem; font-size: var(--font-ui-small); }
+.propheading { font-size: 16px; font-weight: 500; color: var(--fg); padding: 4px; margin-bottom: 8px; }
+.propblock .prow { display: grid; grid-template-columns: 9em minmax(0, 1fr) auto; gap: 0 8px; align-items: center; min-height: 28px; margin-bottom: 3px; border-radius: 6px; }
+.propblock .key { display: flex; align-items: center; gap: 6px; color: var(--fg-muted); min-width: 0; }
+.propblock .key > svg { flex: none; opacity: .85; }
+.propblock .kname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .propblock input { border-color: transparent; background: transparent; padding: 2px 6px; }
 .propblock .prow:hover input, .propblock input:focus { border-color: var(--border); background: var(--bg); }
 .propblock .remove { color: transparent; padding: 0 4px; }
