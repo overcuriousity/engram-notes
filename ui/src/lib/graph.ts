@@ -1,4 +1,5 @@
-import type { Graph, GraphEdge, GraphNode } from "./api";
+import type { Graph, GraphNode, SemanticEdge } from "./api";
+import { mergeEdges, type DrawEdge } from "./semantic";
 
 /** Obsidian's graph.json keys, plus the local graph's depth. */
 export interface GraphSettings {
@@ -8,6 +9,9 @@ export interface GraphSettings {
   hideUnresolved: boolean;
   showOrphans: boolean;
   showArrow: boolean;
+  // Dashed associations and near passages: off globally, on in a local graph.
+  showSemantic: boolean;
+  showSemanticLocal: boolean;
   textFadeMultiplier: number;
   nodeSizeMultiplier: number;
   lineSizeMultiplier: number;
@@ -26,6 +30,8 @@ export const DEFAULTS: GraphSettings = {
   hideUnresolved: false,
   showOrphans: true,
   showArrow: false,
+  showSemantic: false,
+  showSemanticLocal: true,
   textFadeMultiplier: 0,
   nodeSizeMultiplier: 1,
   lineSizeMultiplier: 1,
@@ -66,7 +72,7 @@ export function searchWords(q: string): string {
 }
 
 export interface ViewNode { id: string; title: string; kind: GraphNode["kind"] | "tag"; tags: string[]; inbound: number }
-export interface ViewGraph { nodes: ViewNode[]; edges: GraphEdge[] }
+export interface ViewGraph { nodes: ViewNode[]; edges: DrawEdge[] }
 
 function matches(n: GraphNode, s: Search, content: Set<string> | null): boolean {
   const path = n.id.toLowerCase();
@@ -80,7 +86,7 @@ function matches(n: GraphNode, s: Search, content: Set<string> | null): boolean 
 }
 
 /** Nodes within `depth` links of `center`, following links either way. */
-export function neighbourhood(edges: GraphEdge[], center: string, depth: number): Set<string> {
+export function neighbourhood(edges: DrawEdge[], center: string, depth: number): Set<string> {
   const adj = new Map<string, string[]>();
   const add = (a: string, b: string) => adj.set(a, [...(adj.get(a) ?? []), b]);
   for (const e of edges) {
@@ -105,7 +111,13 @@ export function neighbourhood(edges: GraphEdge[], center: string, depth: number)
 }
 
 /** What the graph draws. `content` holds the notes full-text search found for the plain words. */
-export function filterGraph(g: Graph, s: GraphSettings, content: Set<string> | null, center?: string | null): ViewGraph {
+export function filterGraph(
+  g: Graph,
+  s: GraphSettings,
+  content: Set<string> | null,
+  center?: string | null,
+  semantic: SemanticEdge[] = [],
+): ViewGraph {
   const search = parseSearch(s.search);
   const searching = Object.values(search).some((terms) => terms.length > 0);
   let nodes: ViewNode[] = g.nodes
@@ -113,13 +125,14 @@ export function filterGraph(g: Graph, s: GraphSettings, content: Set<string> | n
     .filter((n) => !searching || matches(n, search, content))
     .map((n) => ({ ...n, inbound: 0 }));
   const kept = new Set(nodes.map((n) => n.id));
-  let edges = g.edges.filter((e) => kept.has(e.source) && kept.has(e.target));
+  const drawn = mergeEdges(g.edges, semantic, center ? s.showSemanticLocal : s.showSemantic);
+  let edges = drawn.filter((e) => kept.has(e.source) && kept.has(e.target));
   if (s.showTags) {
     const tags = new Set<string>();
     for (const n of nodes) {
       for (const t of n.tags) {
         tags.add(t);
-        edges.push({ source: n.id, target: `#${t}` });
+        edges.push({ source: n.id, target: `#${t}`, kind: "link", weight: 1 });
       }
     }
     for (const t of [...tags].sort()) nodes.push({ id: `#${t}`, title: `#${t}`, kind: "tag", tags: [], inbound: 0 });

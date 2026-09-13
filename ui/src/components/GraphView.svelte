@@ -2,19 +2,21 @@
   import { onMount } from "svelte";
   import { forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationNodeDatum } from "d3-force";
   import { app } from "../lib/state.svelte";
-  import { createNote, errorMessage, getGraphConfig, graph as loadGraph, search, setGraphConfig, type Graph } from "../lib/api";
+  import { createNote, errorMessage, getGraphConfig, graph as loadGraph, search, semanticEdges, setGraphConfig, type Graph, type SemanticEdge } from "../lib/api";
   import { DEFAULTS, filterGraph, forces, labelAlpha, radius, readSettings, searchWords, type GraphSettings, type ViewGraph, type ViewNode } from "../lib/graph";
+  import { weightBucket, type DrawEdge } from "../lib/semantic";
 
   let { local }: { local: boolean } = $props();
 
   interface Node extends SimulationNodeDatum { data: ViewNode; r: number }
-  interface Link { source: Node; target: Node }
+  interface Link { source: Node; target: Node; kind: DrawEdge["kind"]; weight: number }
   type NumKey = { [K in keyof GraphSettings]: GraphSettings[K] extends number ? K : never }[keyof GraphSettings];
 
   let canvas = $state<HTMLCanvasElement>();
   let data = $state.raw<Graph>({ nodes: [], edges: [] });
   let settings = $state<GraphSettings>({ ...DEFAULTS });
   let content = $state.raw<Set<string> | null>(null);
+  let semantic = $state.raw<SemanticEdge[]>([]);
   let panel = $state(false);
   let loaded = $state(false);
   // graph.json as read, so keys this app does not know are written back unchanged.
@@ -34,7 +36,8 @@
 
   const say = (e: unknown) => app.say(errorMessage(e));
   const center = $derived(local ? app.lastNote : null);
-  const shown = $derived<ViewGraph>(local && !center ? { nodes: [], edges: [] } : filterGraph(data, settings, content, center));
+  const semanticOn = $derived(local ? settings.showSemanticLocal : settings.showSemantic);
+  const shown = $derived<ViewGraph>(local && !center ? { nodes: [], edges: [] } : filterGraph(data, settings, content, center, semantic));
 
   onMount(() => {
     const c = canvas!;
@@ -61,6 +64,18 @@
   $effect(() => {
     void app.files;
     loadGraph().then((g) => (data = g)).catch(say);
+  });
+
+  // The local graph asks for the centre's edges; the global graph for the vault's.
+  $effect(() => {
+    void app.files;
+    if (!semanticOn || (local && !center)) {
+      semantic = [];
+      return;
+    }
+    semanticEdges(local && center ? [center] : null)
+      .then((e) => (semantic = e))
+      .catch(say);
   });
 
   // Plain words also match note text, through full-text search.
@@ -99,7 +114,7 @@
       byId.set(d.id, n);
       return n;
     });
-    links = g.edges.map((e) => ({ source: byId.get(e.source)!, target: byId.get(e.target)! }));
+    links = g.edges.map((e) => ({ source: byId.get(e.source)!, target: byId.get(e.target)!, kind: e.kind, weight: e.weight }));
     const degree = new Map<Node, number>();
     for (const l of links) for (const n of [l.source, l.target]) degree.set(n, (degree.get(n) ?? 0) + 1);
     if (old.size === 0) view.k = Math.min(1.5, Math.max(0.15, Math.sqrt(30 / Math.max(1, nodes.length))));
@@ -150,6 +165,7 @@
     for (const lit of [false, true]) {
       ctx.beginPath();
       for (const l of links) {
+        if (l.kind !== "link") continue;
         if ((l.source === hover || l.target === hover) !== lit) continue;
         ctx.moveTo(l.source.x!, l.source.y!);
         ctx.lineTo(l.target.x!, l.target.y!);
@@ -159,9 +175,37 @@
       ctx.stroke();
     }
 
+    // Learned and near: dashed, thicker where the tie is stronger. Batched by
+    // width so a whole vault of them still costs a handful of paths.
+    const dashed = links.filter((l) => l.kind !== "link");
+    if (dashed.length) {
+      ctx.setLineDash([4 / k, 3 / k]);
+      for (const lit of [false, true]) {
+        for (const bucket of [0, 1, 2]) {
+          let any = false;
+          ctx.beginPath();
+          for (const l of dashed) {
+            if ((l.source === hover || l.target === hover) !== lit) continue;
+            if (weightBucket(l) !== bucket) continue;
+            any = true;
+            ctx.moveTo(l.source.x!, l.source.y!);
+            ctx.lineTo(l.target.x!, l.target.y!);
+          }
+          if (!any) continue;
+          ctx.lineWidth = Math.max((0.6 + bucket * 0.6) * settings.lineSizeMultiplier, 0.5 / k);
+          ctx.strokeStyle = color(lit ? "--accent" : "--graph-line");
+          ctx.globalAlpha = lit ? 1 : dim;
+          ctx.stroke();
+        }
+      }
+      ctx.setLineDash([]);
+      ctx.lineWidth = Math.max(settings.lineSizeMultiplier, 0.5 / k);
+    }
+
     if (settings.showArrow) {
       ctx.beginPath();
-      for (const { source: a, target: b } of links) {
+      for (const { source: a, target: b, kind } of links) {
+        if (kind !== "link") continue;
         const dx = b.x! - a.x!;
         const dy = b.y! - a.y!;
         const len = Math.hypot(dx, dy) || 1;
@@ -344,6 +388,16 @@
       <label><input type="checkbox" bind:checked={settings.showOrphans} /> Orphans</label>
       <h4>Display</h4>
       <label><input type="checkbox" bind:checked={settings.showArrow} /> Arrows</label>
+      <label>
+        <input
+          type="checkbox"
+          checked={semanticOn}
+          onchange={(e) => {
+            const on = e.currentTarget.checked;
+            if (local) settings.showSemanticLocal = on;
+            else settings.showSemantic = on;
+          }} /> Semantic edges
+      </label>
       {@render slider("Text fade threshold", "textFadeMultiplier", -3, 3, 0.1)}
       {@render slider("Node size", "nodeSizeMultiplier", 0.1, 5, 0.1)}
       {@render slider("Link thickness", "lineSizeMultiplier", 0.1, 5, 0.1)}

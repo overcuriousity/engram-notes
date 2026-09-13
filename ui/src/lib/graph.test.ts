@@ -50,7 +50,16 @@ describe("graph filters", () => {
     const v = filterGraph(g, s({ showTags: true }), null);
     expect(ids(v)).toContain("#proj");
     expect(ids(v)).toContain("#proj/sub");
-    expect(v.edges).toContainEqual({ source: "A.md", target: "#proj" });
+    expect(v.edges).toContainEqual({ source: "A.md", target: "#proj", kind: "link", weight: 1 });
+  });
+
+  it("draws semantic edges only where the toggle for that graph says so", () => {
+    const sem = [{ source: "A.md", target: "B.md", weight: 0.8, kind: "similar" as const }];
+    const bare = { nodes: g.nodes, edges: [] };
+    expect(filterGraph(bare, s({}), null, null, sem).edges).toHaveLength(0);
+    const localEdges = filterGraph(bare, s({}), null, "A.md", sem).edges;
+    expect(localEdges).toHaveLength(1);
+    expect(localEdges[0].kind).toBe("similar");
   });
 
   it("keeps a local graph's neighbourhood to the chosen depth", () => {
