@@ -5,6 +5,9 @@
   import { applyRename, createFolder, deleteFile, errorMessage, planRename } from "../lib/api";
   import { buildTree, dropTarget, fileTag, freeName, parent, renameTarget, type TreeDir } from "../lib/tree";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
+  import FilePlus from "@lucide/svelte/icons/file-plus";
+  import FolderPlus from "@lucide/svelte/icons/folder-plus";
+  import ChevronsDownUp from "@lucide/svelte/icons/chevrons-down-up";
 
   interface Menu { x: number; y: number; path: string; isDir: boolean }
 
@@ -104,6 +107,13 @@
     el.focus();
     el.select();
   }
+
+  // Obsidian's collapse-all: every folder in the vault, not only the open ones.
+  function collapseAll() {
+    const next: Record<string, boolean> = {};
+    for (const d of app.folders) next[d] = true;
+    collapsed = next;
+  }
 </script>
 
 <svelte:window onclick={() => (menu = null)} />
@@ -170,14 +180,10 @@
   {/each}
 {/snippet}
 
-<div class="pane-title explorer-head">
-  <span>Files</span>
-  <span>
-    <button title="New note" onclick={() => guarded(() => newNote())}>＋</button>
-    <button title="New folder" aria-label="New folder" onclick={() => newFolderIn("")}>
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 4.5v8h13v-7H8L6.5 4H1.5z" /><path d="M8 7.5v3M6.5 9h3" /></svg>
-    </button>
-  </span>
+<div class="explorer-head">
+  <button class="icon" title="New note" aria-label="New note" onclick={() => guarded(() => newNote())}><FilePlus size={16} strokeWidth={1.75} /></button>
+  <button class="icon" title="New folder" aria-label="New folder" onclick={() => newFolderIn("")}><FolderPlus size={16} strokeWidth={1.75} /></button>
+  <button class="icon" title="Collapse all" aria-label="Collapse all" onclick={collapseAll}><ChevronsDownUp size={16} strokeWidth={1.75} /></button>
 </div>
 <div
   class="tree"

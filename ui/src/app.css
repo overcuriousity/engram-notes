@@ -134,10 +134,9 @@ mark { background: var(--mark); color: inherit; }
 input[type="checkbox"] { appearance: none; width: 14px; height: 14px; padding: 0; margin: 0; border: 1.5px solid var(--fg-muted); border-radius: 3px; background: transparent; vertical-align: middle; cursor: pointer; }
 input[type="checkbox"]:hover { border-color: var(--accent); }
 input[type="checkbox"]:checked { border-color: var(--accent); background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat; }
-.explorer-head { display: flex; justify-content: space-between; align-items: center; }
-.explorer-head button { color: var(--fg-muted); padding: 0 4px; vertical-align: middle; }
-.explorer-head button:hover { color: var(--fg); }
-.tree { min-height: calc(100% - 72px); padding-bottom: 24px; }
+/* The explorer's actions live in the band, as Obsidian's do; there is no second header. */
+.explorer-head { display: flex; align-items: center; gap: 2px; height: var(--header-height); padding: 0 6px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+.tree { min-height: calc(100% - var(--header-height)); padding: 4px 0 24px; }
 .tree.drop, .tree button.drop { background: var(--accent-bg); }
 .tree input.rename { display: block; margin: 1px 0; padding: 1px 6px; font-size: 14px; }
 .graph { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--bg); }
