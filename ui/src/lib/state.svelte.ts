@@ -25,9 +25,8 @@ class AppStateStore {
   titles = $state<[string, string][]>([]);
   showLeft = $state(true);
   showRight = $state(true);
-  palette = $state<"none" | "files" | "commands">("none");
+  palette = $state<"none" | "files" | "commands" | "search">("none");
   settings = $state(false);
-  leftPane = $state<"files" | "search">("files");
   rightPane = $state<"note" | "props" | "all" | "related">("note");
   watching = $state(true);
   jump = $state<{ pane: number; path: string; line: number } | null>(null);

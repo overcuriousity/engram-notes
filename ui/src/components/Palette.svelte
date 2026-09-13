@@ -1,7 +1,8 @@
 <script lang="ts">
   import { app } from "../lib/state.svelte";
   import { allCommands } from "../lib/commands";
-  import { createNote, errorMessage } from "../lib/api";
+  import { createNote, errorMessage, recordEvent, search, type SearchResults } from "../lib/api";
+  import SearchResults_ from "./SearchResults.svelte";
   import { createName, matchCommands, matchNotes } from "../lib/palette";
 
   interface Item { label: string; detail: string; run: () => void | Promise<void> }
@@ -9,8 +10,36 @@
   let q = $state("");
   let sel = $state(0);
   let input = $state<HTMLInputElement>();
+  let found = $state<SearchResults>({ hits: [], associated: [] });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const rows = $derived(found.hits.length + found.associated.length);
+
+  $effect(() => {
+    if (app.palette !== "search") return;
+    const query = q;
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      found = query.trim() ? await search(query) : { hits: [], associated: [] };
+      if (query.trim()) void recordEvent("search", undefined, query).catch(() => {});
+    }, 150);
+    return () => clearTimeout(timer);
+  });
+
+  // A search row opens its note; the other two modes run their item.
+  function openHit(path: string, line?: number) {
+    app.palette = "none";
+    void app.openFromSearch(path, line, q).catch((e) => app.say(errorMessage(e)));
+  }
+
+  function chooseHit(i: number) {
+    const hit = found.hits[i];
+    if (hit) return openHit(hit.path, hit.line);
+    const assoc = found.associated[i - found.hits.length];
+    if (assoc) return openHit(assoc.path);
+  }
 
   const items = $derived.by((): Item[] => {
+    if (app.palette === "search") return [];
     if (app.palette === "commands") {
       return matchCommands(allCommands(), q).map((c) => ({ label: c.name, detail: c.hotkey, run: c.run }));
     }
@@ -35,6 +64,7 @@
     if (app.palette !== "none") {
       q = "";
       sel = 0;
+      found = { hits: [], associated: [] };
       setTimeout(() => input?.focus());
     }
   });
@@ -51,9 +81,10 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === "ArrowDown") { sel = Math.min(sel + 1, items.length - 1); e.preventDefault(); }
+    const last = (app.palette === "search" ? rows : items.length) - 1;
+    if (e.key === "ArrowDown") { sel = Math.min(sel + 1, last); e.preventDefault(); }
     else if (e.key === "ArrowUp") { sel = Math.max(sel - 1, 0); e.preventDefault(); }
-    else if (e.key === "Enter") { e.preventDefault(); void choose(sel); }
+    else if (e.key === "Enter") { e.preventDefault(); if (app.palette === "search") chooseHit(sel); else void choose(sel); }
     else if (e.key === "Escape") { app.palette = "none"; }
     e.stopPropagation();
   }
@@ -62,12 +93,16 @@
 {#if app.palette !== "none"}
   <div class="scrim" onclick={() => (app.palette = "none")} role="presentation">
     <div class="palette" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" onkeydown={() => {}}>
-      <input bind:this={input} bind:value={q} onkeydown={onKey} placeholder={app.palette === "files" ? "Open note…" : "Run command…"} />
-      <div class="items">
-        {#each items as it, i (it.label + it.detail)}
-          <button class:active={i === sel} onclick={() => choose(i)}><span>{it.label}</span><span class="detail">{it.detail}</span></button>
-        {/each}
-      </div>
+      <input bind:this={input} bind:value={q} onkeydown={onKey} placeholder={app.palette === "files" ? "Open note…" : app.palette === "search" ? "Search the vault…" : "Run command…"} />
+      {#if app.palette === "search"}
+        <SearchResults_ results={found} {sel} onOpen={openHit} />
+      {:else}
+        <div class="items">
+          {#each items as it, i (it.label + it.detail)}
+            <button class:active={i === sel} onclick={() => choose(i)}><span>{it.label}</span><span class="detail">{it.detail}</span></button>
+          {/each}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}

@@ -7,7 +7,6 @@
   import VaultPicker from "./components/VaultPicker.svelte";
   import Ribbon from "./components/Ribbon.svelte";
   import Explorer from "./components/Explorer.svelte";
-  import Search from "./components/Search.svelte";
   import Workspace from "./components/Workspace.svelte";
   import Backlinks from "./components/Backlinks.svelte";
   import Outgoing from "./components/Outgoing.svelte";
@@ -64,13 +63,7 @@
     <div class="bandgrip" onpointerdown={dragWindow} ondblclick={() => getCurrentWindow().toggleMaximize()}></div>
     <WindowControls />
     <aside class="sidebar">
-      {#if app.showLeft}
-        <div class="panestrip">
-          <button class:active={app.leftPane === "files"} onclick={() => (app.leftPane = "files")}>Files</button>
-          <button class:active={app.leftPane === "search"} onclick={() => (app.leftPane = "search")}>Search</button>
-        </div>
-        {#if app.leftPane === "files"}<Explorer />{:else}<Search />{/if}
-      {/if}
+      {#if app.showLeft}<Explorer />{/if}
     </aside>
     <main class="centre">
       <Workspace node={app.layout} />

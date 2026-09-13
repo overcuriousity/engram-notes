@@ -88,6 +88,11 @@ mark { background: var(--mark); color: inherit; }
 .palette { width: 560px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,.3); overflow: hidden; }
 .palette input { width: 100%; border: none; border-bottom: 1px solid var(--border); border-radius: 0; padding: 10px 14px; font-size: 15px; }
 .palette .items { max-height: 50vh; overflow: auto; }
+/* Search rows are two lines each, so the modal is given more room than a command list. */
+.palette .items .linkrow { display: block; border-bottom: none; padding: 6px 14px; text-align: left; }
+.palette .items .linkrow.active { background: var(--accent-bg); }
+.palette .items .divider-line { margin: 6px 14px 2px; }
+.palette .items .pane-title.sub { padding: 8px 14px 3px; margin-top: 4px; }
 .palette .items button { display: flex; justify-content: space-between; width: 100%; padding: 6px 14px; text-align: left; }
 .palette .items button.active, .palette .items button:hover { background: var(--accent-bg); }
 .palette .detail { color: var(--fg-muted); font-size: var(--font-ui-small); }

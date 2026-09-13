@@ -25,7 +25,7 @@ export async function newBase(dir = "") {
 export const defaults: Command[] = [
   { id: "palette", name: "Open command palette", hotkey: "Ctrl+P", run: () => (app.palette = "commands") },
   { id: "switcher", name: "Quick switcher", hotkey: "Ctrl+O", run: () => (app.palette = "files") },
-  { id: "search", name: "Search in all files", hotkey: "Ctrl+Shift+F", run: () => { app.leftPane = "search"; app.showLeft = true; } },
+  { id: "search", name: "Search in all files", hotkey: "Ctrl+K", run: () => (app.palette = "search") },
   { id: "new-note", name: "New note", hotkey: "Ctrl+N", run: () => newNote() },
   { id: "new-base", name: "Create new base", hotkey: "", run: () => newBase() },
   { id: "graph", name: "Open graph view", hotkey: "Ctrl+G", run: () => app.openNote("graph:global") },
