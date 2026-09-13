@@ -107,6 +107,11 @@ pub fn apply_rename(vault: &Vault, index: &mut Index, plan: &RenamePlan) -> Resu
     let moves = moves(vault, &plan.from, &plan.to)?;
     vault.rename(&plan.from, &plan.to)?;
     // Moved notes are rewritten too: they may name each other or themselves.
+    for m in &moves {
+        if is_note(&m.to) {
+            index.move_memory(&m.from, &m.to)?;
+        }
+    }
     let mut files: Vec<String> = moves
         .iter()
         .filter(|m| is_note(&m.to))
@@ -276,5 +281,24 @@ mod tests {
         assert!(ix.note("Old.md").unwrap().is_none());
         assert_eq!(ix.backlinks("sub/New.md").unwrap().len(), 1);
         assert!(ix.unresolved().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_rename_carries_memory_to_the_new_path() {
+        let (_d, v, mut ix) = indexed(&[("Old.md", "I am old"), ("Ref.md", "[[Old]]")]);
+        let cfg = crate::config::MemoryConfig::default();
+        ix.record_event(
+            crate::memory::EventKind::Open,
+            Some("Old.md"),
+            None,
+            &cfg,
+            0,
+        )
+        .unwrap();
+        let plan = plan_rename(&v, &ix, "Old.md", "sub/New.md").unwrap();
+        apply_rename(&v, &mut ix, &plan).unwrap();
+        let act = ix.activation_map(0, 30.0).unwrap();
+        assert!(act.contains_key("sub/New.md"), "{act:?}");
+        assert!(!act.contains_key("Old.md"));
     }
 }

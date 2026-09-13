@@ -7,6 +7,7 @@ pub mod error;
 pub mod frontmatter;
 pub mod graph;
 pub mod index;
+pub mod memory;
 pub mod parse;
 pub mod rename;
 pub mod search;
