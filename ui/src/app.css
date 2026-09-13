@@ -16,7 +16,10 @@
   --font-ui-small: 13px;
   --font-ui-smaller: 12px;
   --row-pad: 4px 8px;
-  --tab-height: 34px;
+  /* Obsidian's header band: one 40px row across the window, every region in it. */
+  --header-height: 40px;
+  --ribbon-width: 44px;
+  --tab-height: var(--header-height);
   color-scheme: light;
   --graph-note: #b3b9c2; --graph-line: #e2e5ea; --graph-tag: #86c39a; --graph-attachment: #dcc07a;
 }
@@ -37,7 +40,7 @@ html, body, #app { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--font-ui); overflow: hidden; }
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px; }
-.layout { display: grid; grid-template-columns: 40px var(--left, 240px) 1fr var(--right, 280px); grid-template-rows: 1fr 22px; height: 100%; }
+.layout { display: grid; grid-template-columns: var(--ribbon-width) var(--left, 240px) 1fr var(--right, 280px); grid-template-rows: 1fr 22px; height: 100%; }
 .layout.no-left { --left: 0px; }
 .layout.no-right { --right: 0px; }
 .sidebar { background: var(--bg-2); border-right: 1px solid var(--border); overflow: auto; }
@@ -57,9 +60,8 @@ input { font: inherit; color: var(--fg); background: var(--bg); border: 1px soli
 .tree button { display: block; width: 100%; text-align: left; font-size: var(--font-ui-small); padding: var(--row-pad); border-radius: var(--radius); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tree button:hover { background: var(--bg-3); }
 .tree button.active { background: var(--accent-bg); }
-.tabs { display: flex; background: var(--bg-2); border-bottom: 1px solid var(--border); overflow-x: auto; }
-.tabs { display: flex; height: var(--tab-height); align-items: center; gap: 2px; padding: 0 4px; background: var(--bg-2); }
-.tabs button { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px 0 10px; border-right: none; border-radius: var(--radius); color: var(--fg-muted); white-space: nowrap; font-size: var(--font-ui-small); }
+.tabs { display: flex; height: var(--header-height); align-items: center; gap: 2px; padding: 0 8px; overflow-x: auto; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+.tabs button { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-right: none; border-radius: var(--radius); color: var(--fg-muted); white-space: nowrap; font-size: var(--font-ui-small); }
 .tabs button:hover { background: var(--bg-3); }
 .tabs button.active { background: var(--bg); color: var(--fg); }
 .tabs .x { display: inline-flex; opacity: 0; border-radius: 3px; padding: 1px; }
@@ -96,8 +98,8 @@ mark { background: var(--mark); color: inherit; }
 .chip { display: inline-flex; align-items: center; background: var(--accent-bg); border-radius: 10px; padding: 0 2px 0 8px; font-size: 12px; }
 .chip button { color: var(--fg-muted); padding: 0 4px; }
 .chip-input { width: 64px; border: none !important; background: transparent !important; padding: 0 4px !important; }
-.panestrip { display: flex; border-bottom: 1px solid var(--border); }
-.panestrip button { flex: 1; display: grid; place-items: center; padding: 6px; color: var(--fg-muted); font-size: var(--font-ui-small); }
+.panestrip { display: flex; height: var(--header-height); align-items: stretch; padding: 0 8px; background: var(--bg-2); border-bottom: 1px solid var(--border); }
+.panestrip button { flex: 1; display: grid; place-items: center; color: var(--fg-muted); font-size: var(--font-ui-small); }
 .panestrip button.active { color: var(--fg); border-bottom: 2px solid var(--accent); }
 .menu { position: fixed; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(0,0,0,.2); z-index: 20; min-width: 160px; }
 .menu button { display: block; width: 100%; text-align: left; padding: 5px 12px; font-size: var(--font-ui-small); }
@@ -193,7 +195,7 @@ select option { background: var(--bg); color: var(--fg); }
 .addprop:hover { color: var(--fg); }
 .cm-props-hidden { height: 0; }
 
-.tabheader { display: flex; align-items: center; gap: 2px; height: 30px; padding: 0 6px; border-bottom: 1px solid var(--border); }
+.tabheader { display: flex; align-items: center; gap: 8px; height: var(--header-height); padding: 0 12px; background: var(--bg); border-bottom: 1px solid var(--border); }
 .tabheader .title { flex: 1; text-align: center; color: var(--fg-muted); font-size: var(--font-ui-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tabheader .sep { color: var(--fg-muted); opacity: .5; margin: 0 5px; }
 .icon { display: inline-grid; place-items: center; color: var(--fg-muted); padding: 4px; border-radius: var(--radius); line-height: 1; }
@@ -201,7 +203,9 @@ select option { background: var(--bg); color: var(--fg); }
 .icon:disabled { opacity: .35; cursor: default; }
 .tabs .newtab { border-right: none; padding: 2px 8px; align-self: center; }
 
-.ribbon { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; background: var(--bg-2); border-right: 1px solid var(--border); }
+/* The ribbon starts under the band; its corner carries the band's colour. */
+.ribbon { position: relative; margin-top: var(--header-height); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; background: var(--bg-2); border-right: 1px solid var(--border); }
+.ribbon::before { content: ""; position: absolute; left: 0; top: calc(var(--header-height) * -1); width: 100%; height: var(--header-height); background: var(--bg-2); border-bottom: 1px solid var(--border); box-sizing: border-box; }
 .ribbon .icon { width: 30px; height: 30px; display: grid; place-items: center; font-size: 15px; }
 .ribbon .spacer { flex: 1; }
 .countrow { display: flex; justify-content: space-between; gap: 8px; padding: 3px 12px; font-size: var(--font-ui-small); }

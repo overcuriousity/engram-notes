@@ -1,0 +1,35 @@
+{
+  "root": "/vault",
+  "config": {
+    "editor": { "default_mode": "live" },
+    "daily_notes": { "folder": "Daily", "template": null, "format": "%Y-%m-%d" },
+    "hotkeys": {},
+    "theme": "light",
+    "search": { "limit": 20, "semantic": true, "similarity_floor": 0.83 },
+    "memory": { "enabled": true },
+    "embed": { "model_dir": null }
+  },
+  "folders": ["Rust", "Rust/Deep", "Kitchen"],
+  "files": [
+    { "path": "Rust/Borrowing.md", "text": "---\ntitle: Borrowing\ncount: 3\ndue: 2026-09-20\nstamped: 2026-09-20T10:30\ndone: true\ntags: [rust, memory]\naliases: [Borrow checker]\n---\n\n# Borrowing\n\nA reference borrows; see [[Rust/Deep/Lifetimes]].\n" },
+    { "path": "Rust/Deep/Lifetimes.md", "text": "# Lifetimes\n\nThey outlive.\n" },
+    { "path": "Kitchen/Sourdough.md", "text": "# Sourdough\n\nFlour, water, salt.\n" },
+    { "path": "Kitchen/crumb.png", "size": 20481 },
+    { "path": "Kitchen/Recipes.base", "text": "views:\n  - type: table\n    name: All\n" },
+    { "path": "Index.md", "text": "# Index\n\nEverything starts here.\n" }
+  ],
+  "properties": {
+    "Rust/Borrowing.md": { "title": "Borrowing", "count": 3, "due": "2026-09-20", "stamped": "2026-09-20T10:30", "done": true, "tags": ["rust", "memory"], "aliases": ["Borrow checker"] }
+  },
+  "workspace": {
+    "layout": {
+      "kind": "split", "id": 3, "dir": "row", "sizes": [0.55, 0.45],
+      "children": [
+        { "kind": "pane", "id": 1, "tabs": [{ "path": "Rust/Borrowing.md", "mode": "live" }, { "path": "Index.md", "mode": "live" }], "active": 0 },
+        { "kind": "pane", "id": 2, "tabs": [{ "path": "Kitchen/Sourdough.md", "mode": "live" }], "active": 0 }
+      ]
+    },
+    "activePane": 1,
+    "rightPane": "props"
+  }
+}
