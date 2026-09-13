@@ -35,6 +35,8 @@
 </script>
 
 <div class="statusbar">
+  <!-- Obsidian keeps every status item at the right edge. -->
+  <span style="flex:1"></span>
   <button onclick={() => (app.showLeft = !app.showLeft)} title="Toggle left sidebar">☰</button>
   <span>{notes} notes</span>
   {#if app.activeDoc}
@@ -43,7 +45,6 @@
     <span>{words} words</span>
     <span>{chars} characters</span>
   {/if}
-  <span style="flex:1"></span>
   {#if embed.state === "loading"}
     <span>downloading model</span>
   {:else if embed.state === "error"}

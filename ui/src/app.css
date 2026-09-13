@@ -21,6 +21,7 @@
   --ribbon-width: 44px;
   /* The window buttons live at the band's right end; the strip under them keeps clear. */
   --frame-right-space: 126px;
+  --file-line-width: 700px;
   --tab-height: var(--header-height);
   color-scheme: light;
   --graph-note: #b3b9c2; --graph-line: #e2e5ea; --graph-tag: #86c39a; --graph-attachment: #dcc07a;
@@ -119,7 +120,7 @@ mark { background: var(--mark); color: inherit; }
 .menu button { display: block; width: 100%; text-align: left; padding: 5px 12px; font-size: var(--font-ui-small); }
 .menu button:hover { background: var(--accent-bg); }
 .cm-editor { height: auto; font-family: var(--font-text); font-size: 16px; }
-.cm-editor .cm-content { max-width: 760px; margin: 0 auto; padding: 24px 32px; }
+.cm-editor .cm-content { max-width: var(--file-line-width); margin: 0 auto; padding: 24px 32px; }
 .cm-editor .cm-line { padding: 0; }
 .cm-editor.cm-focused { outline: none; }
 .fileview { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
@@ -197,7 +198,7 @@ select option { background: var(--bg); color: var(--fg); }
 .chip:hover { color: var(--fg); background: var(--bg-3); }
 
 /* Obsidian's Properties view: in the note's flow, the same column as its text. */
-.propblock { max-width: 760px; margin: 0 auto; padding: 8px 32px 2rem; font-size: var(--font-ui-small); }
+.propblock { max-width: var(--file-line-width); margin: 0 auto; padding: 8px 32px 2rem; font-size: var(--font-ui-small); }
 .propheading { font-size: 16px; font-weight: 500; color: var(--fg); padding: 4px; margin-bottom: 8px; }
 .propblock .prow { display: grid; grid-template-columns: 9em minmax(0, 1fr) auto; gap: 0 8px; align-items: center; min-height: 28px; margin-bottom: 3px; border-radius: 6px; }
 .propblock .key { display: flex; align-items: center; gap: 6px; color: var(--fg-muted); min-width: 0; }
