@@ -14,7 +14,7 @@ project before. The spec is
 (`2026-09-13-handoff.md`, `-2.md`) are superseded; skim the first one's
 *Gotchas* only.
 
-Check out `feat/obsidian-parity-ui` — it is sixteen commits ahead of `master`,
+Check out `feat/obsidian-parity-ui` — it is twenty-five commits ahead of `master`,
 pushed, and unmerged. Continue on it rather than branching again.
 
 Note that `AGENTS.md` changed at the end of the last session: the old "no
