@@ -1,4 +1,5 @@
 mod commands;
+mod embed;
 mod error;
 mod state;
 
@@ -43,6 +44,13 @@ pub fn run() {
             commands::anchor_line,
             commands::attachment_path,
             commands::open_external,
+            commands::record_event,
+            commands::related,
+            commands::forget_memory,
+            commands::embed_status,
+            commands::typing,
+            commands::semantic_edges,
+            commands::set_model_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running engram-notes");

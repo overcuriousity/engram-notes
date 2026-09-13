@@ -1,8 +1,9 @@
+use crate::embed::Embed;
 use engram_core::config::AppConfig;
 use engram_core::index::Index;
 use engram_core::vault::Vault;
 use engram_core::watch::Watcher;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub struct Open {
     pub vault: Vault,
@@ -15,4 +16,5 @@ pub struct Open {
 #[derive(Default)]
 pub struct AppState {
     pub open: Mutex<Option<Open>>,
+    pub embed: Mutex<Arc<Embed>>,
 }

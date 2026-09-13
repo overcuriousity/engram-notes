@@ -1,12 +1,14 @@
+use crate::embed::EmbedStatus;
 use crate::error::{CmdResult, CommandError};
 use crate::state::{AppState, Open};
 use engram_core::bases::{SortKey, Table};
 use engram_core::config::{self, AppConfig};
-use engram_core::graph::Graph;
-use engram_core::index::fts::FtsHit;
+use engram_core::graph::{Graph, SemanticEdge};
 use engram_core::index::query::{LinkRow, TagCount, Unresolved};
 use engram_core::index::{Index, RebuildStats};
+use engram_core::memory::{EventKind, related::Related};
 use engram_core::rename::RenamePlan;
+use engram_core::search::SearchResults;
 use engram_core::vault::{FileEntry, Vault};
 use engram_core::watch::{Change, ChangeKind};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -102,6 +104,20 @@ pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdRe
         config: cfg.clone(),
         _watcher: watcher,
     });
+    // A previous vault's thread stops; a new one loads the model and drains.
+    let embed = {
+        let mut slot = state.embed.lock().unwrap();
+        slot.stop();
+        *slot = std::sync::Arc::new(crate::embed::Embed::default());
+        slot.clone()
+    };
+    crate::embed::spawn(
+        app.clone(),
+        embed,
+        cfg.embed.clone(),
+        config::data_dir()?.join("models"),
+    );
+
     Ok(VaultInfo {
         root,
         config: cfg,
@@ -354,10 +370,119 @@ pub fn search(
     state: State<AppState>,
     query: String,
     limit: Option<usize>,
-) -> CmdResult<Vec<FtsHit>> {
+) -> CmdResult<SearchResults> {
+    // The query vector is taken before the index lock, and only if a model is up.
+    let vector = {
+        let embed = state.embed.lock().unwrap().clone();
+        let mut guard = embed.embedder.lock().unwrap();
+        guard.as_mut().and_then(|m| m.embed_query(&query).ok())
+    };
     with_open(&state, |o| {
-        Ok(o.index.search_fts(&query, limit.unwrap_or(50))?)
+        Ok(engram_core::search::hybrid(
+            &o.index,
+            &query,
+            vector.as_deref(),
+            &o.config.search,
+            &o.config.memory,
+            now(),
+            limit.unwrap_or(50),
+        )?)
     })
+}
+
+fn now() -> i64 {
+    chrono::Local::now().timestamp()
+}
+
+#[tauri::command]
+pub fn record_event(
+    state: State<AppState>,
+    kind: EventKind,
+    path: Option<String>,
+    query: Option<String>,
+) -> CmdResult<()> {
+    with_open(&state, |o| {
+        if !o.config.memory.enabled {
+            return Ok(());
+        }
+        o.index.record_event(
+            kind,
+            path.as_deref(),
+            query.as_deref(),
+            &o.config.memory,
+            now(),
+        )?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn related(state: State<AppState>, path: String) -> CmdResult<Related> {
+    with_open(&state, |o| {
+        let text = o.vault.read(&path).unwrap_or_default();
+        Ok(engram_core::memory::related::related(
+            &o.index,
+            &path,
+            &text,
+            &o.config.memory,
+            now(),
+            10,
+        )?)
+    })
+}
+
+#[tauri::command]
+pub fn forget_memory(state: State<AppState>) -> CmdResult<()> {
+    with_open(&state, |o| Ok(o.index.forget_memory()?))
+}
+
+#[tauri::command]
+pub fn semantic_edges(
+    state: State<AppState>,
+    paths: Option<Vec<String>>,
+    top_k: Option<usize>,
+) -> CmdResult<Vec<SemanticEdge>> {
+    with_open(&state, |o| {
+        Ok(engram_core::graph::semantic_edges(
+            &o.index,
+            paths.as_deref(),
+            top_k.unwrap_or(3),
+            &o.config.memory,
+            now(),
+        )?)
+    })
+}
+
+#[tauri::command]
+pub fn embed_status(state: State<AppState>) -> EmbedStatus {
+    let embed = state.embed.lock().unwrap().clone();
+    let status = embed.status.lock().unwrap();
+    status.clone()
+}
+
+/// The editor pings while the user types; the queue waits.
+#[tauri::command]
+pub fn typing(state: State<AppState>) {
+    let embed = state.embed.lock().unwrap().clone();
+    *embed.typing.lock().unwrap() = Some(std::time::Instant::now());
+}
+
+/// A folder with the ONNX file and tokenizer, or `None` to download again.
+#[tauri::command]
+pub fn set_model_dir(app: AppHandle, state: State<AppState>, dir: Option<String>) -> CmdResult<()> {
+    let cfg = with_open(&state, |o| {
+        o.config.embed.model_dir = dir;
+        config::save_config(&o.vault, &o.config)?;
+        Ok(o.config.embed.clone())
+    })?;
+    let embed = {
+        let mut slot = state.embed.lock().unwrap();
+        slot.stop();
+        *slot = std::sync::Arc::new(crate::embed::Embed::default());
+        slot.clone()
+    };
+    crate::embed::spawn(app, embed, cfg, config::data_dir()?.join("models"));
+    Ok(())
 }
 
 #[tauri::command]
@@ -524,5 +649,39 @@ mod tests {
             serde_json::from_value(json!({"from": "a.md", "to": "b.md", "affected": ["c.md"]}))
                 .unwrap();
         assert_eq!(p.affected, vec!["c.md"]);
+    }
+
+    #[test]
+    fn search_results_and_status_serialise_for_the_frontend() {
+        let hit = engram_core::search::Hit {
+            path: "A.md".into(),
+            title: "A".into(),
+            snippet: "<mark>a</mark>".into(),
+            heading: Some("H".into()),
+            line: 3,
+            similarity: Some(0.8),
+            score: 0.5,
+            past_divider: true,
+            primed: false,
+        };
+        let json = serde_json::to_value(engram_core::search::SearchResults {
+            hits: vec![hit],
+            associated: vec![],
+        })
+        .unwrap();
+        assert_eq!(json["hits"][0]["past_divider"], true);
+        // An f32 widens on the way out; the frontend reads a number, not a literal.
+        let similarity = json["hits"][0]["similarity"].as_f64().unwrap();
+        assert!((similarity - 0.8).abs() < 1e-6, "{similarity}");
+        let status = serde_json::to_value(crate::embed::EmbedStatus::default()).unwrap();
+        assert_eq!(status["state"], "off");
+        assert_eq!(status["pending"], 0);
+    }
+
+    #[test]
+    fn an_event_kind_arrives_as_snake_case() {
+        let kind: engram_core::memory::EventKind =
+            serde_json::from_str("\"open_from_search\"").unwrap();
+        assert_eq!(kind, engram_core::memory::EventKind::OpenFromSearch);
     }
 }
