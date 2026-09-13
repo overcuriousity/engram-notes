@@ -6,6 +6,9 @@ pub struct FtsHit {
     pub path: String,
     pub title: String,
     pub snippet: String,
+    pub heading: Option<String>,
+    /// 1-based line in the file; a text match is not tied to one passage.
+    pub line: u32,
     pub score: f64,
 }
 
@@ -37,7 +40,7 @@ impl Index {
         // swapped for tags afterwards. Title weight 10 puts title hits first.
         let sql = "SELECT n.path, n.title,
                           snippet(notes_fts, 1, char(1), char(2), '…', 24),
-                          bm25(notes_fts, 10.0, 1.0)
+                          bm25(notes_fts, 10.0, 1.0), n.body_line
                    FROM notes_fts JOIN notes n ON n.rowid = notes_fts.rowid
                    WHERE notes_fts MATCH ?1
                    ORDER BY bm25(notes_fts, 10.0, 1.0)
@@ -54,6 +57,8 @@ impl Index {
                     path: r.get(0)?,
                     title: r.get(1)?,
                     snippet,
+                    heading: None,
+                    line: r.get::<_, i64>(4)? as u32,
                     score: -r.get::<_, f64>(3)?,
                 })
             })?

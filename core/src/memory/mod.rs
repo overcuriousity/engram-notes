@@ -2,6 +2,8 @@
 //! every value stored as `(value, stamped_at)` and read through `decayed`.
 
 pub mod decay;
+pub mod prime;
+pub mod spread;
 
 use crate::Result;
 use crate::config::MemoryConfig;
