@@ -158,7 +158,7 @@
         ondragend={end}
         ondragover={(e) => over(e, parent(f.path))}
         ondrop={(e) => drop(e, parent(f.path))}
-        onclick={() => guarded(() => app.openNote(f.path))}
+        onclick={(e) => guarded(() => app.openNote(f.path, undefined, "open", undefined, e.ctrlKey || e.metaKey))}
         oncontextmenu={(e) => openMenu(e, f.path, false)}
       >
         {f.name}

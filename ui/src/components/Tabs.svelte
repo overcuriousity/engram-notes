@@ -16,4 +16,5 @@
       <span class="x" role="button" tabindex="-1" onclick={(e) => { e.stopPropagation(); app.closeTab(pane.id, i); }} onkeydown={() => {}}>×</span>
     </button>
   {/each}
+  <button class="newtab icon" title="New tab" onclick={() => app.newTab()}>+</button>
 </div>

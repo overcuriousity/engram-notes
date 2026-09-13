@@ -35,6 +35,7 @@ export function imageSize(alias?: string): { width?: number; height?: number } {
 }
 
 export function tabTitle(path: string): string {
+  if (path === "") return "New tab";
   if (path === "graph:global") return "Graph view";
   if (path === "graph:local") return "Local graph";
   return path.slice(path.lastIndexOf("/") + 1).replace(/\.(md|base)$/i, "");

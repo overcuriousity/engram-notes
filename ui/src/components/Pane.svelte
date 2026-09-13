@@ -2,6 +2,7 @@
   import { app } from "../lib/state.svelte";
   import type { Pane } from "../lib/layout";
   import Tabs from "./Tabs.svelte";
+  import TabHeader from "./TabHeader.svelte";
   import NoteView from "./NoteView.svelte";
   import FileView from "./FileView.svelte";
   import GraphView from "./GraphView.svelte";
@@ -22,7 +23,8 @@
   onpointerdown={() => app.focusPane(pane.id)}
 >
   <Tabs {pane} />
-  {#if tab}
+  <TabHeader {pane} />
+  {#if tab?.path}
     {#key tab.path}
       {#if kind === "note"}
         <NoteView paneId={pane.id} path={tab.path} />

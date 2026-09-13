@@ -64,7 +64,6 @@
     onChange(lines.join("\n"));
   }
 
-  const modes = ["live", "source", "reading"] as const;
 </script>
 
 {#if doc}
@@ -75,11 +74,6 @@
       <button onclick={() => app.resolveConflict(doc, true)}>Keep mine</button>
     </div>
   {/if}
-  <div class="modes">
-    {#each modes as m (m)}
-      <button class:active={mode === m} onclick={() => app.setMode(paneId, path, m)}>{m}</button>
-    {/each}
-  </div>
   <div class="note">
     <!-- Source mode shows the file as it is, frontmatter included. -->
     {#if mode !== "source"}<PropertiesBlock {path} />{/if}
