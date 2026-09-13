@@ -13,9 +13,10 @@
   --font-mono: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
   --radius: 6px;
   /* Obsidian's interface is smaller than its text and its rows are tight. */
-  --font-ui-small: 12px;
-  --font-ui-smaller: 11px;
-  --row-pad: 2px 8px;
+  --font-ui-small: 13px;
+  --font-ui-smaller: 12px;
+  --row-pad: 4px 8px;
+  --tab-height: 34px;
   color-scheme: light;
   --graph-note: #b3b9c2; --graph-line: #e2e5ea; --graph-tag: #86c39a; --graph-attachment: #dcc07a;
 }
@@ -33,7 +34,7 @@
 }
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--fg); font: 13px/1.4 var(--font-ui); overflow: hidden; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--font-ui); overflow: hidden; }
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px; }
 .layout { display: grid; grid-template-columns: 40px var(--left, 240px) 1fr var(--right, 280px); grid-template-rows: 1fr 22px; height: 100%; }
@@ -52,14 +53,19 @@ input { font: inherit; color: var(--fg); background: var(--bg); border: 1px soli
 .pane.focused .tabs button.active { box-shadow: inset 0 2px 0 var(--accent); }
 .note.empty { display: grid; place-items: center; color: var(--fg-muted); }
 .statusbar { grid-column: 1 / -1; background: var(--bg-2); border-top: 1px solid var(--border); font-size: var(--font-ui-smaller); color: var(--fg-muted); padding: 0 10px; display: flex; gap: 14px; align-items: center; }
-.pane-title { font-size: var(--font-ui-smaller); text-transform: uppercase; letter-spacing: .06em; color: var(--fg-muted); padding: 6px 10px 2px; }
-.tree button { display: block; width: 100%; text-align: left; padding: var(--row-pad); border-radius: var(--radius); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pane-title { font-size: var(--font-ui-smaller); text-transform: uppercase; letter-spacing: .04em; color: var(--fg-muted); padding: 8px 12px 3px; }
+.tree button { display: block; width: 100%; text-align: left; font-size: var(--font-ui-small); padding: var(--row-pad); border-radius: var(--radius); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tree button:hover { background: var(--bg-3); }
 .tree button.active { background: var(--accent-bg); }
 .tabs { display: flex; background: var(--bg-2); border-bottom: 1px solid var(--border); overflow-x: auto; }
-.tabs button { padding: 4px 10px; border-right: 1px solid var(--border); color: var(--fg-muted); white-space: nowrap; font-size: var(--font-ui-small); }
+.tabs { display: flex; height: var(--tab-height); align-items: center; gap: 2px; padding: 0 4px; background: var(--bg-2); }
+.tabs button { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px 0 10px; border-right: none; border-radius: var(--radius); color: var(--fg-muted); white-space: nowrap; font-size: var(--font-ui-small); }
+.tabs button:hover { background: var(--bg-3); }
+.tabs button.active { background: var(--bg); color: var(--fg); }
+.tabs .x { display: inline-flex; opacity: 0; border-radius: 3px; padding: 1px; }
+.tabs button:hover .x, .tabs button.active .x { opacity: .6; }
+.tabs .x:hover { opacity: 1; background: var(--bg-3); }
 .tabs button.active { color: var(--fg); background: var(--bg); }
-.tabs button .x { margin-left: 8px; opacity: .6; }
 /* The pane scrolls, not CodeMirror: the properties block is a sibling of the
    editor and has to scroll with the note. */
 .note { flex: 1; min-height: 0; overflow: auto; }
@@ -76,11 +82,11 @@ mark { background: var(--mark); color: inherit; }
 .palette .items button { display: flex; justify-content: space-between; width: 100%; padding: 6px 14px; text-align: left; }
 .palette .items button.active, .palette .items button:hover { background: var(--accent-bg); }
 .palette .detail { color: var(--fg-muted); font-size: var(--font-ui-small); }
-.linkrow { display: block; width: 100%; text-align: left; padding: 4px 10px; border-bottom: 1px solid var(--border); }
+.linkrow { display: block; width: 100%; text-align: left; padding: 5px 12px; border-bottom: 1px solid var(--border); font-size: var(--font-ui-small); }
 .linkrow:hover { background: var(--bg-3); }
 .linkrow .src { font-weight: 500; }
 .linkrow .ctx { color: var(--fg-muted); font-size: var(--font-ui-smaller); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.props { padding: 4px 10px; display: grid; grid-template-columns: minmax(60px, 35%) minmax(0, 1fr) auto; gap: 3px 8px; font-size: var(--font-ui-small); align-items: center; }
+.props { padding: 4px 12px; display: grid; grid-template-columns: minmax(60px, 35%) minmax(0, 1fr) auto; gap: 3px 8px; font-size: var(--font-ui-small); align-items: center; }
 .props .key { color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .props input { padding: 2px 6px; min-width: 0; width: 100%; }
 .props input[type="checkbox"] { justify-self: start; width: 14px; padding: 0; }
@@ -91,10 +97,10 @@ mark { background: var(--mark); color: inherit; }
 .chip button { color: var(--fg-muted); padding: 0 4px; }
 .chip-input { width: 64px; border: none !important; background: transparent !important; padding: 0 4px !important; }
 .panestrip { display: flex; border-bottom: 1px solid var(--border); }
-.panestrip button { flex: 1; padding: 4px; color: var(--fg-muted); font-size: var(--font-ui-small); }
+.panestrip button { flex: 1; display: grid; place-items: center; padding: 6px; color: var(--fg-muted); font-size: var(--font-ui-small); }
 .panestrip button.active { color: var(--fg); border-bottom: 2px solid var(--accent); }
 .menu { position: fixed; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(0,0,0,.2); z-index: 20; min-width: 160px; }
-.menu button { display: block; width: 100%; text-align: left; padding: 4px 10px; }
+.menu button { display: block; width: 100%; text-align: left; padding: 5px 12px; font-size: var(--font-ui-small); }
 .menu button:hover { background: var(--accent-bg); }
 .cm-editor { height: auto; font-family: var(--font-text); font-size: 16px; }
 .cm-editor .cm-content { max-width: 760px; margin: 0 auto; padding: 24px 32px; }
@@ -176,8 +182,8 @@ select option { background: var(--bg); color: var(--fg); }
 .chip:hover { color: var(--fg); background: var(--bg-3); }
 
 /* Obsidian's Properties view: in the note's flow, the same column as its text. */
-.propblock { max-width: 760px; margin: 0 auto; padding: 16px 32px 4px; font-size: var(--font-ui-small); }
-.propblock .prow { display: grid; grid-template-columns: minmax(80px, 26%) minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 1px 0; }
+.propblock { max-width: 760px; margin: 0 auto; padding: 20px 32px 6px; font-size: var(--font-ui-small); }
+.propblock .prow { display: grid; grid-template-columns: minmax(80px, 26%) minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 2px 0; }
 .propblock .key { color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .propblock input { border-color: transparent; background: transparent; padding: 2px 6px; }
 .propblock .prow:hover input, .propblock input:focus { border-color: var(--border); background: var(--bg); }
@@ -187,18 +193,18 @@ select option { background: var(--bg); color: var(--fg); }
 .addprop:hover { color: var(--fg); }
 .cm-props-hidden { height: 0; }
 
-.tabheader { display: flex; align-items: center; gap: 2px; padding: 2px 6px; border-bottom: 1px solid var(--border); }
+.tabheader { display: flex; align-items: center; gap: 2px; height: 30px; padding: 0 6px; border-bottom: 1px solid var(--border); }
 .tabheader .title { flex: 1; text-align: center; color: var(--fg-muted); font-size: var(--font-ui-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.icon { color: var(--fg-muted); padding: 2px 6px; border-radius: var(--radius); line-height: 1; }
+.tabheader .sep { color: var(--fg-muted); opacity: .5; margin: 0 5px; }
+.icon { display: inline-grid; place-items: center; color: var(--fg-muted); padding: 4px; border-radius: var(--radius); line-height: 1; }
 .icon:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
 .icon:disabled { opacity: .35; cursor: default; }
-.tabs { display: flex; align-items: stretch; }
 .tabs .newtab { border-right: none; padding: 2px 8px; align-self: center; }
 
 .ribbon { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; background: var(--bg-2); border-right: 1px solid var(--border); }
 .ribbon .icon { width: 30px; height: 30px; display: grid; place-items: center; font-size: 15px; }
 .ribbon .spacer { flex: 1; }
-.countrow { display: flex; justify-content: space-between; gap: 8px; padding: 2px 10px; font-size: var(--font-ui-small); }
+.countrow { display: flex; justify-content: space-between; gap: 8px; padding: 3px 12px; font-size: var(--font-ui-small); }
 .countrow:hover { background: var(--bg-3); }
 .countrow .n { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .settings { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,.3); width: 460px; max-height: 76vh; overflow: auto; padding: 4px 0 12px; }

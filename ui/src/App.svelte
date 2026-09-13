@@ -16,6 +16,10 @@
   import Palette from "./components/Palette.svelte";
   import StatusBar from "./components/StatusBar.svelte";
   import Settings from "./components/Settings.svelte";
+  import ArrowLeftRight from "@lucide/svelte/icons/arrow-left-right";
+  import ListIcon from "@lucide/svelte/icons/list";
+  import LayoutList from "@lucide/svelte/icons/layout-list";
+  import CircleDot from "@lucide/svelte/icons/circle-dot";
 
   $effect(() => {
     const t = app.config?.theme ?? "system";
@@ -63,10 +67,10 @@
     <aside class="sidebar right">
       {#if app.showRight}
         <div class="panestrip">
-          <button class:active={app.rightPane === "note"} title="Links" onclick={() => (app.rightPane = "note")}>⇄</button>
-          <button class:active={app.rightPane === "props"} title="Properties" onclick={() => (app.rightPane = "props")}>▤</button>
-          <button class:active={app.rightPane === "all"} title="All properties" onclick={() => (app.rightPane = "all")}>≣</button>
-          <button class:active={app.rightPane === "related"} title="Related" onclick={() => (app.rightPane = "related")}>◍</button>
+          <button class:active={app.rightPane === "note"} title="Links" onclick={() => (app.rightPane = "note")}><ArrowLeftRight size={15} strokeWidth={1.75} /></button>
+          <button class:active={app.rightPane === "props"} title="Properties" onclick={() => (app.rightPane = "props")}><ListIcon size={15} strokeWidth={1.75} /></button>
+          <button class:active={app.rightPane === "all"} title="All properties" onclick={() => (app.rightPane = "all")}><LayoutList size={15} strokeWidth={1.75} /></button>
+          <button class:active={app.rightPane === "related"} title="Related" onclick={() => (app.rightPane = "related")}><CircleDot size={15} strokeWidth={1.75} /></button>
         </div>
         {#if app.rightPane === "note"}<Backlinks /><Outgoing />
         {:else if app.rightPane === "props"}<Properties />
