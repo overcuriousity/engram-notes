@@ -18,6 +18,8 @@
     focus: boolean;
     jump: { line: number } | null;
     onJumped: () => void;
+    insert: { text: string; n: number } | null;
+    onInserted: () => void;
     onchange: (t: string) => void;
     onblur: () => void;
     onFollow: (target: string) => void;
@@ -25,7 +27,7 @@
     tags: () => string[];
     image: (target: string) => string | null;
   }
-  let { text, mode, focus, jump, onJumped, onchange, onblur, onFollow, titles, tags, image }: Props = $props();
+  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, titles, tags, image }: Props = $props();
   let host: HTMLDivElement;
   // State, so effects that need the view run again once it exists.
   let view = $state.raw<EditorView>();
@@ -91,6 +93,17 @@
     view.dispatch({ selection: { anchor: line.from }, effects: EditorView.scrollIntoView(line.from, { y: "start", yMargin: 24 }) });
     view.focus();
     onJumped();
+  });
+
+  // The Related pane's *link* action, applied where the cursor is.
+  $effect(() => {
+    const req = insert;
+    const v = view;
+    if (!req || !v) return;
+    const at = v.state.selection.main.head;
+    v.dispatch({ changes: { from: at, insert: req.text }, selection: { anchor: at + req.text.length } });
+    v.focus();
+    onInserted();
   });
 </script>
 

@@ -18,6 +18,7 @@
   const doc = $derived(app.docs[path]);
   const mode = $derived(findPane(app.layout, paneId)?.tabs.find((t) => t.path === path)?.mode ?? "live");
   const jump = $derived(app.jump && app.jump.pane === paneId && app.jump.path === path ? app.jump : null);
+  const insert = $derived(app.insertion && app.insertion.path === path ? app.insertion : null);
   const jumped = () => (app.jump = null);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let tagList = $state<string[]>([]);
@@ -86,6 +87,8 @@
         focus={app.activePane === paneId}
         {jump}
         onJumped={jumped}
+        {insert}
+        onInserted={() => (app.insertion = null)}
         onchange={onChange}
         onblur={() => app.save(doc)}
         onFollow={follow}

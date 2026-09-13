@@ -10,6 +10,7 @@
   import Backlinks from "./components/Backlinks.svelte";
   import Outgoing from "./components/Outgoing.svelte";
   import Properties from "./components/Properties.svelte";
+  import Related from "./components/Related.svelte";
   import Palette from "./components/Palette.svelte";
   import StatusBar from "./components/StatusBar.svelte";
 
@@ -55,7 +56,7 @@
       <Workspace node={app.layout} />
     </main>
     <aside class="sidebar right">
-      {#if app.showRight}<Backlinks /><Outgoing /><Properties />{/if}
+      {#if app.showRight}<Backlinks /><Outgoing /><Properties /><Related />{/if}
     </aside>
     <StatusBar />
   </div>
