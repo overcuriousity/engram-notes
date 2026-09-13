@@ -21,8 +21,15 @@ longer than the code it describes, cut it.
   `src-tauri` is a thin shell. The frontend never touches the filesystem.
 - Files are the truth. Anything derived is rebuildable, and a schema bump
   rebuilds rather than migrates.
-- KISS. One trait per seam, one implementation until a second exists. No
-  abstraction for a future that has not arrived.
+- Build for the product this is meant to become: something people keep their
+  life's notes in for years, and better than Obsidian, not merely equal to it.
+  Where a choice is between the shape that works today and the shape that will
+  still hold at ten times the vault, take the second, and say why in the
+  commit. A seam that a known direction of the roadmap needs is worth having
+  before that work starts.
+  This is not licence to speculate: an abstraction still has to name the second
+  case it serves. The test is "which real, named thing needs this?", not "how
+  few lines is this today".
 - Where a feature is Obsidian-inspired, match Obsidian's behaviour and file
   formats. Where it is engram-inspired, match engram's concepts.
 - Tests run without a model, a window or the network. The embedder has a

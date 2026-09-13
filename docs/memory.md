@@ -126,3 +126,10 @@ per wheel event (eased over frames toward a target), and no way to send a node
 to the other split (Ctrl-click, through `openInOtherPane`). **A small graph
 still leaves margin around itself: `fitView` caps the zoom at 2 so six notes do
 not blow up to fill a pane.**
+
+## Clicking a node in the graph
+
+Obsidian opens the note over the graph, in the graph's own pane. Ours opens it
+in the other split, making one when there is none, so the graph stays visible
+while you read — the user asked for this after using both side by side. There
+is no modifier: one behaviour, through `app.openInOtherPane`.
