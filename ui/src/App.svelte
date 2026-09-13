@@ -4,6 +4,7 @@
   import { errorMessage } from "./lib/api";
   import { fileKind } from "./lib/files";
   import VaultPicker from "./components/VaultPicker.svelte";
+  import Ribbon from "./components/Ribbon.svelte";
   import Explorer from "./components/Explorer.svelte";
   import Search from "./components/Search.svelte";
   import Workspace from "./components/Workspace.svelte";
@@ -28,6 +29,7 @@
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       app.palette = "none";
+      app.settings = false;
       return;
     }
     const cmd = allCommands().find((x) => x.hotkey === chord(e));
@@ -43,6 +45,7 @@
   <VaultPicker />
 {:else}
   <div class="layout" class:no-left={!app.showLeft} class:no-right={!app.showRight}>
+    <Ribbon />
     <aside class="sidebar">
       {#if app.showLeft}
         <div class="panestrip">

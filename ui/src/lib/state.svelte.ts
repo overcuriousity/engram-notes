@@ -26,6 +26,7 @@ class AppStateStore {
   showLeft = $state(true);
   showRight = $state(true);
   palette = $state<"none" | "files" | "commands">("none");
+  settings = $state(false);
   leftPane = $state<"files" | "search">("files");
   watching = $state(true);
   jump = $state<{ pane: number; path: string; line: number } | null>(null);

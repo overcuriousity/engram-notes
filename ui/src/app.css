@@ -36,7 +36,7 @@ html, body, #app { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 13px/1.4 var(--font-ui); overflow: hidden; }
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px; }
-.layout { display: grid; grid-template-columns: var(--left, 240px) 1fr var(--right, 280px); grid-template-rows: 1fr 22px; height: 100%; }
+.layout { display: grid; grid-template-columns: 40px var(--left, 240px) 1fr var(--right, 280px); grid-template-rows: 1fr 22px; height: 100%; }
 .layout.no-left { --left: 0px; }
 .layout.no-right { --right: 0px; }
 .sidebar { background: var(--bg-2); border-right: 1px solid var(--border); overflow: auto; }
@@ -194,3 +194,7 @@ select option { background: var(--bg); color: var(--fg); }
 .icon:disabled { opacity: .35; cursor: default; }
 .tabs { display: flex; align-items: stretch; }
 .tabs .newtab { border-right: none; padding: 2px 8px; align-self: center; }
+
+.ribbon { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; background: var(--bg-2); border-right: 1px solid var(--border); }
+.ribbon .icon { width: 30px; height: 30px; display: grid; place-items: center; font-size: 15px; }
+.ribbon .spacer { flex: 1; }
