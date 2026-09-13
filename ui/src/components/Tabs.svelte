@@ -15,8 +15,8 @@
   {#each pane.tabs as t, i (t.path)}
     <button class:active={i === pane.active} onclick={() => app.activate(pane.id, i)}>
       {tabTitle(t.path)}{dirty(t.path) ? " •" : ""}
-      <span class="x" role="button" tabindex="-1" onclick={(e) => { e.stopPropagation(); app.closeTab(pane.id, i); }} onkeydown={() => {}}><X size={13} strokeWidth={2} /></span>
+      <span class="x" role="button" tabindex="-1" onclick={(e) => { e.stopPropagation(); app.closeTab(pane.id, i); }} onkeydown={() => {}}><X size={15} strokeWidth={2} /></span>
     </button>
   {/each}
-  <button class="newtab icon" title="New tab" onclick={() => app.newTab()}><Plus size={15} strokeWidth={2} /></button>
+  <button class="newtab icon" title="New tab" onclick={() => app.newTab()}><Plus size={17} strokeWidth={2} /></button>
 </div>

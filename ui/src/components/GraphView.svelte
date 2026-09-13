@@ -3,7 +3,7 @@
   import { forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationNodeDatum } from "d3-force";
   import { app } from "../lib/state.svelte";
   import { createNote, errorMessage, getGraphConfig, graph as loadGraph, search, semanticEdges, setGraphConfig, type Graph, type SemanticEdge } from "../lib/api";
-  import { DEFAULTS, filterGraph, fitView, forces, hitRadius, labelAlpha, radius, readSettings, searchWords, type GraphSettings, type ViewGraph, type ViewNode } from "../lib/graph";
+  import { DEFAULTS, easeStep, filterGraph, fitView, forces, hitRadius, labelAlpha, radius, readSettings, searchWords, type GraphSettings, type ViewGraph, type ViewNode } from "../lib/graph";
   import { weightBucket, type DrawEdge } from "../lib/semantic";
 
   let { local }: { local: boolean } = $props();
@@ -31,7 +31,7 @@
   let size = { w: 0, h: 0 };
   let hover: Node | null = null;
   let near = new Set<Node>();
-  let press: { sx: number; sy: number; vx: number; vy: number; node: Node | null; moved: boolean; other: boolean } | null = null;
+  let press: { sx: number; sy: number; vx: number; vy: number; node: Node | null; moved: boolean } | null = null;
   let frame = 0;
   // A wheel notch or a fit sets a target the view slides to; a drag moves it outright.
   let target: { x: number; y: number; k: number } | null = null;
@@ -157,17 +157,22 @@
     ease();
   }
 
+  // One loop, started once and left to run: a gesture retargets faster than a frame
+  // arrives, and cancelling per event starved the animation in the real window.
   function ease() {
-    cancelAnimationFrame(easing);
+    if (easing) return;
     const step = () => {
       const t = target;
-      if (!t) return;
-      const d = { x: t.x - view.x, y: t.y - view.y, k: t.k - view.k };
-      if (Math.abs(d.k) < 1e-4 && Math.hypot(d.x, d.y) < 0.5) {
-        view = { ...t };
+      if (!t) {
+        easing = 0;
+        return;
+      }
+      const next = easeStep(view, t);
+      view = next.view;
+      if (next.done) {
         target = null;
+        easing = 0;
       } else {
-        view = { x: view.x + d.x * 0.28, y: view.y + d.y * 0.28, k: view.k + d.k * 0.28 };
         easing = requestAnimationFrame(step);
       }
       draw();
@@ -332,11 +337,12 @@
 
   function down(e: PointerEvent) {
     cancelAnimationFrame(easing);
+    easing = 0;
     target = null;
     const p = point(e);
     canvas!.setPointerCapture(e.pointerId);
     const node = nodeAt(p.x, p.y);
-    press = { sx: p.sx, sy: p.sy, vx: view.x, vy: view.y, node, moved: false, other: e.ctrlKey || e.metaKey };
+    press = { sx: p.sx, sy: p.sy, vx: view.x, vy: view.y, node, moved: false };
     if (node) {
       node.fx = node.x;
       node.fy = node.y;
@@ -363,7 +369,7 @@
     if (!p?.node) return;
     p.node.fx = p.node.fy = null;
     sim?.alphaTarget(0);
-    if (!p.moved) void openNode(p.node.data, p.other);
+    if (!p.moved) void openNode(p.node.data);
   }
 
   function wheel(e: WheelEvent) {
@@ -378,9 +384,9 @@
     ease();
   }
 
-  // As in Obsidian: a note opens, an unresolved link creates its note, a tag searches for itself.
-  // Ctrl-click sends the note to the other split instead of this one.
-  async function openNode(n: ViewNode, other = false) {
+  // A note opens beside the graph rather than over it, so the graph stays where it is;
+  // Obsidian replaces the graph instead, and the user asked for the split.
+  async function openNode(n: ViewNode) {
     try {
       if (n.kind === "tag") {
         settings.search = `tag:${n.id}`;
@@ -388,12 +394,9 @@
         const path = /\.md$/i.test(n.id) ? n.id : `${n.id}.md`;
         await createNote(path);
         await app.refresh();
-        if (other) await app.openInOtherPane(path);
-        else await app.openNote(path);
-      } else if (other) {
-        await app.openInOtherPane(n.id);
+        await app.openInOtherPane(path);
       } else {
-        await app.openNote(n.id);
+        await app.openInOtherPane(n.id);
       }
     } catch (e) {
       say(e);
@@ -429,7 +432,7 @@
       <label><input type="checkbox" bind:checked={settings.hideUnresolved} /> Existing files only</label>
       <label><input type="checkbox" bind:checked={settings.showOrphans} /> Orphans</label>
       <h4>Display</h4>
-      <div class="pane-note">Click a node to open it; Ctrl-click opens it in the other split.</div>
+      <div class="pane-note">A node opens beside the graph, in the other split.</div>
       <label><input type="checkbox" bind:checked={settings.showArrow} /> Arrows</label>
       <label>
         <input

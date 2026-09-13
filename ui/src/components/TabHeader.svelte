@@ -26,17 +26,17 @@
 
 <div class="tabheader">
   <button class="icon" title="Back" disabled={!tab || !canBack(tab)} onclick={() => app.step(pane.id, "back")}>
-    <ChevronLeft size={16} strokeWidth={2} />
+    <ChevronLeft size={18} strokeWidth={2} />
   </button>
   <button class="icon" title="Forward" disabled={!tab || !canForward(tab)} onclick={() => app.step(pane.id, "forward")}>
-    <ChevronRight size={16} strokeWidth={2} />
+    <ChevronRight size={18} strokeWidth={2} />
   </button>
   <span class="title">
     {#each crumbs as c, i (i)}{#if i > 0}<span class="sep">/</span>{/if}{c}{/each}
   </span>
   {#if note}
     <button class="icon" title={reading ? "Edit" : "Read"} onclick={toggle}>
-      {#if reading}<Pencil size={16} strokeWidth={1.75} />{:else}<BookOpen size={16} strokeWidth={1.75} />{/if}
+      {#if reading}<Pencil size={18} strokeWidth={1.75} />{:else}<BookOpen size={18} strokeWidth={1.75} />{/if}
     </button>
   {/if}
 </div>

@@ -191,3 +191,12 @@ export function fitView(
   const k = Math.min(2, Math.max(0.05, Math.min((w - pad * 2) / Math.max(1, x1 - x0), (h - pad * 2) / Math.max(1, y1 - y0))));
   return { x: w / 2 - ((x0 + x1) / 2) * k, y: h / 2 - ((y0 + y1) / 2) * k, k };
 }
+
+export interface View { x: number; y: number; k: number }
+
+/** One frame of the slide toward `target`; `done` once the rest is too small to see. */
+export function easeStep(view: View, target: View): { view: View; done: boolean } {
+  const d = { x: target.x - view.x, y: target.y - view.y, k: target.k - view.k };
+  if (Math.abs(d.k) < 1e-4 && Math.hypot(d.x, d.y) < 0.5) return { view: { ...target }, done: true };
+  return { view: { x: view.x + d.x * 0.28, y: view.y + d.y * 0.28, k: view.k + d.k * 0.28 }, done: false };
+}

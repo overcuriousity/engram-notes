@@ -46,7 +46,7 @@
   <div class="props">
     {#each Object.entries(props) as [k, v] (k)}
       {@const Icon = ICONS[propIcon(k, v)]}
-      <span class="key" title={k}><Icon size={15} strokeWidth={2} /><span class="kname">{k}</span></span>
+      <span class="key" title={k}><Icon size={16} strokeWidth={2} /><span class="kname">{k}</span></span>
       <PropertyValue value={v} onCommit={(x) => commit(k, x)} />
       <button class="remove" title="Remove property" onclick={() => commit(k, null)}>×</button>
     {/each}

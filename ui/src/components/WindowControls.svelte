@@ -16,9 +16,9 @@
 </script>
 
 <div class="wincontrols">
-  <button class="icon" title="Minimise" aria-label="Minimise" onclick={() => win.minimize()}><Minus size={15} strokeWidth={2} /></button>
+  <button class="icon" title="Minimise" aria-label="Minimise" onclick={() => win.minimize()}><Minus size={16} strokeWidth={2} /></button>
   <button class="icon" title={maximized ? "Restore" : "Maximise"} aria-label="Maximise" onclick={() => win.toggleMaximize()}>
-    {#if maximized}<Copy size={13} strokeWidth={2} />{:else}<Square size={13} strokeWidth={2} />{/if}
+    {#if maximized}<Copy size={14} strokeWidth={2} />{:else}<Square size={14} strokeWidth={2} />{/if}
   </button>
-  <button class="icon close" title="Close" aria-label="Close" onclick={() => win.close()}><X size={16} strokeWidth={2} /></button>
+  <button class="icon close" title="Close" aria-label="Close" onclick={() => win.close()}><X size={17} strokeWidth={2} /></button>
 </div>

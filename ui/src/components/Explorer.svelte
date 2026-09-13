@@ -181,9 +181,9 @@
 {/snippet}
 
 <div class="explorer-head">
-  <button class="icon" title="New note" aria-label="New note" onclick={() => guarded(() => newNote())}><FilePlus size={16} strokeWidth={1.75} /></button>
-  <button class="icon" title="New folder" aria-label="New folder" onclick={() => newFolderIn("")}><FolderPlus size={16} strokeWidth={1.75} /></button>
-  <button class="icon" title="Collapse all" aria-label="Collapse all" onclick={collapseAll}><ChevronsDownUp size={16} strokeWidth={1.75} /></button>
+  <button class="icon" title="New note" aria-label="New note" onclick={() => guarded(() => newNote())}><FilePlus size={18} strokeWidth={1.75} /></button>
+  <button class="icon" title="New folder" aria-label="New folder" onclick={() => newFolderIn("")}><FolderPlus size={18} strokeWidth={1.75} /></button>
+  <button class="icon" title="Collapse all" aria-label="Collapse all" onclick={collapseAll}><ChevronsDownUp size={18} strokeWidth={1.75} /></button>
 </div>
 <div
   class="tree"

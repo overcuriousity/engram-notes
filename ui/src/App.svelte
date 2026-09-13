@@ -71,10 +71,10 @@
     <aside class="sidebar right">
       {#if app.showRight}
         <div class="panestrip">
-          <button class:active={app.rightPane === "note"} title="Links" onclick={() => (app.rightPane = "note")}><ArrowLeftRight size={15} strokeWidth={1.75} /></button>
-          <button class:active={app.rightPane === "props"} title="Properties" onclick={() => (app.rightPane = "props")}><ListIcon size={15} strokeWidth={1.75} /></button>
-          <button class:active={app.rightPane === "all"} title="All properties" onclick={() => (app.rightPane = "all")}><LayoutList size={15} strokeWidth={1.75} /></button>
-          <button class:active={app.rightPane === "related"} title="Related" onclick={() => (app.rightPane = "related")}><CircleDot size={15} strokeWidth={1.75} /></button>
+          <button class:active={app.rightPane === "note"} title="Links" onclick={() => (app.rightPane = "note")}><ArrowLeftRight size={18} strokeWidth={1.75} /></button>
+          <button class:active={app.rightPane === "props"} title="Properties" onclick={() => (app.rightPane = "props")}><ListIcon size={18} strokeWidth={1.75} /></button>
+          <button class:active={app.rightPane === "all"} title="All properties" onclick={() => (app.rightPane = "all")}><LayoutList size={18} strokeWidth={1.75} /></button>
+          <button class:active={app.rightPane === "related"} title="Related" onclick={() => (app.rightPane = "related")}><CircleDot size={18} strokeWidth={1.75} /></button>
         </div>
         {#if app.rightPane === "note"}<Backlinks /><Outgoing />
         {:else if app.rightPane === "props"}<Properties />

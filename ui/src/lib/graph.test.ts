@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Graph } from "./api";
-import { DEFAULTS, filterGraph, fitView, hitRadius, labelAlpha, parseSearch, radius, readSettings, searchWords, type GraphSettings, type ViewGraph } from "./graph";
+import { DEFAULTS, easeStep, filterGraph, fitView, hitRadius, labelAlpha, parseSearch, radius, readSettings, searchWords, type GraphSettings, type ViewGraph } from "./graph";
 
 const g: Graph = {
   nodes: [
@@ -112,5 +112,27 @@ describe("graph filters", () => {
 
   it("leaves the view alone when there is nothing to fit", () => {
     expect(fitView([], 800, 400)).toEqual({ x: 400, y: 200, k: 1 });
+  });
+
+  it("slides the view a fraction of the way to its target", () => {
+    const a = easeStep({ x: 0, y: 0, k: 1 }, { x: 100, y: 0, k: 2 });
+    expect(a.done).toBe(false);
+    expect(a.view.x).toBeCloseTo(28, 5);
+    expect(a.view.k).toBeCloseTo(1.28, 5);
+  });
+
+  it("snaps to the target once the remaining distance stops mattering", () => {
+    const t = { x: 100, y: 50, k: 2 };
+    const a = easeStep({ x: 99.9, y: 50, k: 2 }, t);
+    expect(a.done).toBe(true);
+    expect(a.view).toEqual(t);
+  });
+
+  // A gesture retargets every few milliseconds; each step must still make progress.
+  it("converges when the target is replaced on every step", () => {
+    let v = { x: 0, y: 0, k: 1 };
+    for (let i = 0; i < 200; i++) v = easeStep(v, { x: 100, y: 0, k: 2 }).view;
+    expect(v.x).toBeCloseTo(100, 3);
+    expect(v.k).toBeCloseTo(2, 3);
   });
 });
