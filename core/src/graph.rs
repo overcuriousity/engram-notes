@@ -115,6 +115,79 @@ pub fn build(index: &Index, files: &[FileEntry]) -> Result<Graph> {
     Ok(Graph { nodes, edges })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SemanticKind {
+    /// A link the memory learned from co-retrieval.
+    Assoc,
+    /// Near passages by embedding.
+    Similar,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct SemanticEdge {
+    pub source: String,
+    pub target: String,
+    pub weight: f32,
+    pub kind: SemanticKind,
+}
+
+/// The edges the graph draws dashed: what the vault is about, not what was
+/// linked by hand. `paths` narrows it to one neighbourhood; `None` is the vault.
+///
+/// Undirected, so a pair is stored with the smaller path first and drawn once.
+pub fn semantic_edges(
+    index: &Index,
+    paths: Option<&[String]>,
+    top_k: usize,
+    cfg: &crate::config::MemoryConfig,
+    at: i64,
+) -> Result<Vec<SemanticEdge>> {
+    let all: Vec<String>;
+    let subset: &[String] = match paths {
+        Some(p) => p,
+        None => {
+            all = index.titles()?.into_iter().map(|(p, _)| p).collect();
+            &all
+        }
+    };
+    let mut seen: HashSet<(String, String)> = HashSet::new();
+    let mut out = Vec::new();
+    for row in index.assoc_from(subset, at, cfg)? {
+        let (a, b) = if row.via < row.other {
+            (row.via.clone(), row.other.clone())
+        } else {
+            (row.other.clone(), row.via.clone())
+        };
+        if seen.insert((a.clone(), b.clone())) {
+            out.push(SemanticEdge {
+                source: a,
+                target: b,
+                weight: row.value as f32,
+                kind: SemanticKind::Assoc,
+            });
+        }
+    }
+    for path in subset {
+        for hit in index.similar_to(std::slice::from_ref(path), top_k)? {
+            let (a, b) = if *path < hit.path {
+                (path.clone(), hit.path.clone())
+            } else {
+                (hit.path.clone(), path.clone())
+            };
+            if hit.similarity > 0.0 && seen.insert((a.clone(), b.clone())) {
+                out.push(SemanticEdge {
+                    source: a,
+                    target: b,
+                    weight: hit.similarity,
+                    kind: SemanticKind::Similar,
+                });
+            }
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,5 +241,69 @@ mod tests {
                 ("sub/B.md", "A.md"),
             ]
         );
+    }
+
+    #[test]
+    fn semantic_edges_carry_associations_and_near_passages() {
+        use crate::config::MemoryConfig;
+        use crate::embed::{Embedder, FakeEmbedder};
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("Rust.md"), "ownership rules keep memory safe").unwrap();
+        std::fs::write(d.path().join("Borrow.md"), "ownership rules and borrowing").unwrap();
+        std::fs::write(d.path().join("Coffee.md"), "kettle grind beans").unwrap();
+        let v = crate::vault::Vault::open(d.path()).unwrap();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        let mut e = FakeEmbedder::new(64);
+        ix.set_model_id(&e.id()).unwrap();
+        let pending = ix.pending_vectors(1000).unwrap();
+        let texts: Vec<String> = pending.iter().map(|p| p.text.clone()).collect();
+        let vecs = e.embed_documents(&texts).unwrap();
+        let rows: Vec<(String, Vec<f32>)> = pending.into_iter().map(|p| p.hash).zip(vecs).collect();
+        ix.put_vectors(&rows).unwrap();
+        let cfg = MemoryConfig::default();
+        ix.bump_assoc("Rust.md", "Coffee.md", 5.0, None, &cfg, 0)
+            .unwrap();
+
+        // Undirected: a pair is stored and drawn with the smaller path first.
+        let all = semantic_edges(&ix, None, 1, &cfg, 0).unwrap();
+        assert!(all.iter().any(|e| e.kind == SemanticKind::Assoc
+            && e.source == "Coffee.md"
+            && e.target == "Rust.md"));
+        let similar: Vec<_> = all
+            .iter()
+            .filter(|e| e.kind == SemanticKind::Similar)
+            .collect();
+        assert!(
+            similar
+                .iter()
+                .any(|e| { (e.source.as_str(), e.target.as_str()) == ("Borrow.md", "Rust.md") })
+        );
+        let mut pairs: Vec<(String, String)> = similar
+            .iter()
+            .map(|e| (e.source.clone(), e.target.clone()))
+            .collect();
+        pairs.sort();
+        pairs.dedup();
+        assert_eq!(pairs.len(), similar.len());
+        assert!(similar.iter().all(|e| e.weight > 0.0 && e.weight <= 1.0));
+    }
+
+    #[test]
+    fn asking_for_one_note_gives_only_its_edges() {
+        use crate::config::MemoryConfig;
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("A.md"), "a").unwrap();
+        std::fs::write(d.path().join("B.md"), "b").unwrap();
+        std::fs::write(d.path().join("C.md"), "c").unwrap();
+        let v = crate::vault::Vault::open(d.path()).unwrap();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        let cfg = MemoryConfig::default();
+        ix.bump_assoc("A.md", "B.md", 5.0, None, &cfg, 0).unwrap();
+        ix.bump_assoc("B.md", "C.md", 5.0, None, &cfg, 0).unwrap();
+        let only_a = semantic_edges(&ix, Some(&["A.md".to_string()]), 3, &cfg, 0).unwrap();
+        assert_eq!(only_a.len(), 1);
+        assert_eq!(only_a[0].target, "B.md");
     }
 }
