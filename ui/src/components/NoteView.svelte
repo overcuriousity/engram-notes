@@ -7,6 +7,7 @@
   import { resolveLink, createNote, anchorLine, tags as apiTags, typing, errorMessage } from "../lib/api";
   import Editor from "./Editor.svelte";
   import Reading from "./Reading.svelte";
+  import PropertiesBlock from "./PropertiesBlock.svelte";
 
   let { paneId, path }: { paneId: number; path: string } = $props();
   // The asset protocol is scoped to the open vault.
@@ -80,6 +81,8 @@
     {/each}
   </div>
   <div class="note">
+    <!-- Source mode shows the file as it is, frontmatter included. -->
+    {#if mode !== "source"}<PropertiesBlock {path} />{/if}
     {#if mode === "reading"}
       <Reading text={doc.text} {image} {jump} onJumped={jumped} onFollow={follow} onToggleTask={toggleTask} />
     {:else}

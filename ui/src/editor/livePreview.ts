@@ -181,15 +181,10 @@ function frontmatterRange(state: EditorState): { from: number; to: number } | nu
 
 class PropertiesFold extends WidgetType {
   eq() { return true; }
-  toDOM(view: EditorView) {
+  // The properties block above the editor shows them; here they only take space.
+  toDOM() {
     const d = document.createElement("div");
-    d.className = "cm-props-fold";
-    d.textContent = "Properties";
-    d.onmousedown = (e) => {
-      e.preventDefault();
-      view.dispatch({ selection: { anchor: 4 } });
-      view.focus();
-    };
+    d.className = "cm-props-hidden";
     return d;
   }
   ignoreEvent() { return true; }
@@ -248,10 +243,7 @@ export function livePreview(opts: { onFollow: (target: string) => void; image?: 
     ".cm-embed-image": { maxWidth: "100%", verticalAlign: "top", borderRadius: "4px" },
     ".cm-embed-missing": { color: "var(--fg-muted)", border: "1px dashed var(--border)", borderRadius: "4px", padding: "0 6px" },
     ".cm-callout-type": { fontWeight: "600", textTransform: "capitalize", color: "var(--accent)" },
-    ".cm-props-fold": {
-      color: "var(--fg-muted)", fontSize: "12px", textTransform: "uppercase", letterSpacing: ".06em",
-      borderBottom: "1px solid var(--border)", padding: "2px 0 6px", marginBottom: "8px", cursor: "pointer",
-    },
+    ".cm-props-hidden": { height: "0" },
   });
   return [plugin, frontmatterFold, clicks, style];
 }

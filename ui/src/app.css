@@ -174,3 +174,15 @@ select option { background: var(--bg); color: var(--fg); }
 .linkrow.suggest .plain { text-align: left; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip { padding: 1px 8px; border: 1px solid var(--border); border-radius: 10px; font-size: 11px; background: none; color: var(--fg-muted); flex: none; }
 .chip:hover { color: var(--fg); background: var(--bg-3); }
+
+/* Obsidian's Properties view: in the note's flow, the same column as its text. */
+.propblock { max-width: 760px; margin: 0 auto; padding: 16px 32px 4px; font-size: var(--font-ui-small); }
+.propblock .prow { display: grid; grid-template-columns: minmax(80px, 26%) minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 1px 0; }
+.propblock .key { color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.propblock input { border-color: transparent; background: transparent; padding: 2px 6px; }
+.propblock .prow:hover input, .propblock input:focus { border-color: var(--border); background: var(--bg); }
+.propblock .remove { color: transparent; padding: 0 4px; }
+.propblock .prow:hover .remove { color: var(--fg-muted); }
+.addprop { color: var(--fg-muted); padding: 3px 6px; font-size: var(--font-ui-small); }
+.addprop:hover { color: var(--fg); }
+.cm-props-hidden { height: 0; }
