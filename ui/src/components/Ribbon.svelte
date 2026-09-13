@@ -9,6 +9,7 @@
   import CalendarDays from "@lucide/svelte/icons/calendar-days";
   import Command from "@lucide/svelte/icons/command";
   import Settings from "@lucide/svelte/icons/settings";
+  import PanelLeftClose from "@lucide/svelte/icons/panel-left-close";
 
   // Obsidian's ribbon: the commands worth one click, in its order and its icons.
   const top = [
@@ -28,6 +29,9 @@
 </script>
 
 <nav class="ribbon">
+  <button class="icon corner" title="Toggle left sidebar" onclick={() => (app.showLeft = !app.showLeft)}>
+    <PanelLeftClose size={18} strokeWidth={1.75} />
+  </button>
   {#each top as t (t.id)}
     <button class="icon" title={t.title} onclick={() => run(t.id)}>
       <t.icon size={18} strokeWidth={1.75} />

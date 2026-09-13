@@ -19,6 +19,8 @@
   /* Obsidian's header band: one 40px row across the window, every region in it. */
   --header-height: 40px;
   --ribbon-width: 44px;
+  /* The window buttons live at the band's right end; the strip under them keeps clear. */
+  --frame-right-space: 126px;
   --tab-height: var(--header-height);
   color-scheme: light;
   --graph-note: #b3b9c2; --graph-line: #e2e5ea; --graph-tag: #86c39a; --graph-attachment: #dcc07a;
@@ -215,7 +217,7 @@ select option { background: var(--bg); color: var(--fg); }
 
 /* The ribbon starts under the band; its corner carries the band's colour. */
 .ribbon { position: relative; margin-top: var(--header-height); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; background: var(--bg-2); border-right: 1px solid var(--border); }
-.ribbon::before { content: ""; position: absolute; left: 0; top: calc(var(--header-height) * -1); width: 100%; height: var(--header-height); background: var(--bg-2); border-bottom: 1px solid var(--border); box-sizing: border-box; }
+.ribbon .corner { position: absolute; top: calc(var(--header-height) * -1); left: 0; width: 100%; height: var(--header-height); border-radius: 0; background: var(--bg-2); border-bottom: 1px solid var(--border); z-index: 5; }
 .ribbon .icon { width: 30px; height: 30px; display: grid; place-items: center; font-size: 15px; }
 .ribbon .spacer { flex: 1; }
 .countrow { display: flex; justify-content: space-between; gap: 8px; padding: 3px 12px; font-size: var(--font-ui-small); }
@@ -226,3 +228,11 @@ select option { background: var(--bg); color: var(--fg); }
 .settings input[type="number"], .settings select, .settings input:not([type]) { width: 200px; }
 .settings .pick { border: 1px solid var(--border); border-radius: var(--radius); padding: 2px 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings .row { display: flex; justify-content: flex-end; padding: 8px 14px 0; }
+
+/* The band is the titlebar: its empty right end drags the window. */
+.bandgrip { position: fixed; top: 0; right: var(--frame-right-space); left: 0; height: var(--header-height); z-index: 0; }
+.wincontrols { position: fixed; top: 0; right: 0; height: var(--header-height); display: flex; align-items: stretch; z-index: 5; }
+.wincontrols .icon { width: calc(var(--frame-right-space) / 3); border-radius: 0; }
+.wincontrols .icon:hover { background: var(--bg-3); }
+.wincontrols .close:hover { background: #c42b1c; color: #fff; }
+.sidebar.right .panestrip { padding-right: calc(var(--frame-right-space) + 8px); }

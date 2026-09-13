@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { app } from "./lib/state.svelte";
   import { allCommands, chord } from "./lib/commands";
   import { errorMessage } from "./lib/api";
@@ -16,6 +17,7 @@
   import Palette from "./components/Palette.svelte";
   import StatusBar from "./components/StatusBar.svelte";
   import Settings from "./components/Settings.svelte";
+  import WindowControls from "./components/WindowControls.svelte";
   import ArrowLeftRight from "@lucide/svelte/icons/arrow-left-right";
   import ListIcon from "@lucide/svelte/icons/list";
   import LayoutList from "@lucide/svelte/icons/layout-list";
@@ -31,6 +33,12 @@
     const p = app.activeTab?.path;
     if (p && fileKind(p) === "note") app.lastNote = p;
   });
+
+  // Only a press on the band's own background drags; a press on a control does not.
+  function dragWindow(e: PointerEvent) {
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button, input, a")) return;
+    void getCurrentWindow().startDragging();
+  }
 
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
@@ -52,6 +60,9 @@
 {:else}
   <div class="layout" class:no-left={!app.showLeft} class:no-right={!app.showRight}>
     <Ribbon />
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="bandgrip" onpointerdown={dragWindow} ondblclick={() => getCurrentWindow().toggleMaximize()}></div>
+    <WindowControls />
     <aside class="sidebar">
       {#if app.showLeft}
         <div class="panestrip">
