@@ -155,3 +155,16 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 /* Drawn rather than native: WebKitGTK paints a native select light in either theme. */
 select { appearance: none; -webkit-appearance: none; font: inherit; color: var(--fg); background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b919a' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 7px center / 10px 6px; border: 1px solid var(--border); border-radius: var(--radius); padding: 1px 24px 1px 8px; cursor: pointer; }
 select option { background: var(--bg); color: var(--fg); }
+
+/* The relevance divider: everything below it is a loose match. */
+.divider-line { display: flex; align-items: center; gap: 8px; margin: 8px 12px 4px; font-size: 11px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .06em; }
+.divider-line::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.linkrow.loose { opacity: .62; font-size: .92em; }
+.pane-title.sub { margin-top: 10px; }
+.pane-note { padding: 6px 12px; font-size: 11px; color: var(--fg-muted); }
+.badge { margin-left: 6px; padding: 0 5px; border: 1px solid var(--border); border-radius: 8px; font-size: 10px; color: var(--fg-muted); font-weight: 400; }
+.dim { color: var(--fg-muted); font-weight: 400; }
+.linkrow.suggest { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.linkrow.suggest .plain { text-align: left; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip { padding: 1px 8px; border: 1px solid var(--border); border-radius: 10px; font-size: 11px; background: none; color: var(--fg-muted); flex: none; }
+.chip:hover { color: var(--fg); background: var(--bg-3); }

@@ -48,7 +48,11 @@ const mock = `
         case "get_graph_config": return FX.graphConfig ?? {};
         case "run_base": { const t = FX.bases?.[args.path]; if (!t) throw { code: "base", message: "no fixture for " + args.path }; return { ...t, view: args.view }; }
         case "plan_rename": return { from: args.from, to: args.to, affected: FX.affected ?? [] };
-        case "search": return FX.search ?? [];
+        case "search": return FX.search ?? { hits: [], associated: [] };
+        case "related": return FX.related ?? { associated: [], similar: [], suggested: [] };
+        case "semantic_edges": return FX.semanticEdges ?? [];
+        case "embed_status": return FX.embed ?? { model: null, state: "off", pending: 0, error: null };
+        case "record_event": case "typing": case "set_config": case "forget_memory": return null;
         case "plugin:event|listen": return ++cb;
         default: return null;
       }

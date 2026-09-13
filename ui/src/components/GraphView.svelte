@@ -70,7 +70,7 @@
       content = null;
       return;
     }
-    const t = setTimeout(() => search(words, 100000).then((hits) => (content = new Set(hits.map((h) => h.path)))).catch(say), 200);
+    const t = setTimeout(() => search(words, 100000).then((r) => (content = new Set(r.hits.map((h) => h.path)))).catch(say), 200);
     return () => clearTimeout(t);
   });
 

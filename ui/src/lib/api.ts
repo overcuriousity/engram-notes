@@ -24,7 +24,17 @@ export interface LinkRow {
 }
 export interface Unresolved { target: string; count: number }
 export interface TagCount { tag: string; count: number }
-export interface FtsHit { path: string; title: string; snippet: string; score: number }
+export interface Hit {
+  path: string; title: string; snippet: string; heading: string | null; line: number;
+  similarity: number | null; score: number; past_divider: boolean; primed: boolean;
+}
+export interface Associated { path: string; title: string; via: string; cue: string | null; strength: number }
+export interface SearchResults { hits: Hit[]; associated: Associated[] }
+export interface SimilarNote { path: string; title: string; heading: string; text: string; similarity: number }
+export interface Related { associated: Associated[]; similar: SimilarNote[]; suggested: SimilarNote[] }
+export interface SemanticEdge { source: string; target: string; weight: number; kind: "assoc" | "similar" }
+export interface EmbedStatus { model: string | null; state: "off" | "loading" | "ready" | "error"; pending: number; error: string | null }
+export type EventKind = "open" | "open_from_search" | "follow_link" | "search"
 export interface RenamePlan { from: string; to: string; affected: string[] }
 export interface Change { path: string; kind: "changed" | "removed" }
 export interface CommandError { code: string; message: string }
@@ -55,7 +65,16 @@ export const titles = () => invoke<[string, string][]>("titles");
 export const tags = () => invoke<TagCount[]>("tags");
 export const properties = (path: string) => invoke<Record<string, unknown>>("properties", { path });
 export const setProperty = (path: string, key: string, value: unknown) => invoke<void>("set_property", { path, key, value });
-export const search = (query: string, limit = 50) => invoke<FtsHit[]>("search", { query, limit });
+export const search = (query: string, limit = 50) => invoke<SearchResults>("search", { query, limit });
+export const recordEvent = (kind: EventKind, path?: string, query?: string) =>
+  invoke<void>("record_event", { kind, path: path ?? null, query: query ?? null });
+export const related = (path: string) => invoke<Related>("related", { path });
+export const forgetMemory = () => invoke<void>("forget_memory");
+export const semanticEdges = (paths: string[] | null, topK = 3) =>
+  invoke<SemanticEdge[]>("semantic_edges", { paths, topK });
+export const embedStatus = () => invoke<EmbedStatus>("embed_status");
+export const typing = () => invoke<void>("typing");
+export const setModelDir = (dir: string | null) => invoke<void>("set_model_dir", { dir });
 export const getConfig = () => invoke<AppConfig>("get_config");
 export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
 export const getWorkspace = () => invoke<Record<string, unknown>>("get_workspace");
@@ -78,6 +97,8 @@ export const onFileChanged = (f: (c: Change) => void): Promise<UnlistenFn> =>
   listen<Change>("file-changed", (e) => f(e.payload));
 export const onWatchFailed = (f: (message: string) => void): Promise<UnlistenFn> =>
   listen<string>("watch-failed", (e) => f(e.payload));
+export const onEmbedStatus = (f: (s: EmbedStatus) => void): Promise<UnlistenFn> =>
+  listen<EmbedStatus>("embed-status", (e) => f(e.payload));
 
 export function errorMessage(e: unknown): string {
   if (e && typeof e === "object" && "message" in e) return String((e as CommandError).message);

@@ -31,6 +31,9 @@ class AppStateStore {
   folders = $state<string[]>([]);
   // The note a local graph centres on: the last one active in any pane.
   lastNote = $state<string | null>(null);
+  embed = $state<api.EmbedStatus>({ model: null, state: "off", pending: 0, error: null });
+  // The Related pane asks the editor showing this note to insert at the cursor.
+  insertion = $state<{ path: string; text: string; n: number } | null>(null);
   private nextId = 2;
 
   get pane(): Pane {
@@ -62,6 +65,8 @@ class AppStateStore {
     await this.restore(await api.getWorkspace());
     await api.onIndexChanged(() => this.refresh());
     await api.onFileChanged((c) => this.externalChange(c));
+    this.embed = await api.embedStatus();
+    await api.onEmbedStatus((s) => (this.embed = s));
     await api.onWatchFailed((msg) => {
       if (this.watching) this.say(`File watching stopped: ${msg}. Changes are read when the window gains focus.`);
       this.watching = false;
@@ -109,7 +114,7 @@ class AppStateStore {
   }
 
   /** Opens `path` in the active pane, or activates its tab there; `line` scrolls to a 1-based line. */
-  async openNote(path: string, line?: number) {
+  async openNote(path: string, line?: number, kind: api.EventKind = "open", query?: string) {
     const p = this.pane;
     const i = p.tabs.findIndex((t) => t.path === path);
     if (i >= 0) {
@@ -121,6 +126,16 @@ class AppStateStore {
       this.persist();
     }
     if (line) this.jump = { pane: p.id, path, line };
+    // Memory is a nicety: recording never blocks the open and never toasts.
+    void api.recordEvent(kind, path, query).catch(() => {});
+  }
+
+  openFromSearch(path: string, line: number | undefined, query: string) {
+    return this.openNote(path, line, "open_from_search", query);
+  }
+
+  insertAtCursor(path: string, text: string) {
+    this.insertion = { path, text, n: (this.insertion?.n ?? 0) + 1 };
   }
 
   activate(paneId: number, index: number) {

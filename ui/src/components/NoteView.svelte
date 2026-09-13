@@ -47,7 +47,7 @@
         await app.refresh();
       }
       const line = fragment ? await anchorLine(found, fragment) : null;
-      await app.openNote(found, line ?? undefined);
+      await app.openNote(found, line ?? undefined, "follow_link");
     } catch (e) {
       app.say(errorMessage(e));
     }
