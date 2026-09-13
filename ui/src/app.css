@@ -201,3 +201,8 @@ select option { background: var(--bg); color: var(--fg); }
 .countrow { display: flex; justify-content: space-between; gap: 8px; padding: 2px 10px; font-size: var(--font-ui-small); }
 .countrow:hover { background: var(--bg-3); }
 .countrow .n { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.settings { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,.3); width: 460px; max-height: 76vh; overflow: auto; padding: 4px 0 12px; }
+.settings label { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 3px 14px; font-size: var(--font-ui-small); }
+.settings input[type="number"], .settings select, .settings input:not([type]) { width: 200px; }
+.settings .pick { border: 1px solid var(--border); border-radius: var(--radius); padding: 2px 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings .row { display: flex; justify-content: flex-end; padding: 8px 14px 0; }

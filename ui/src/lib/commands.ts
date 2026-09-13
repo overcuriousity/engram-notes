@@ -39,6 +39,7 @@ export const defaults: Command[] = [
   { id: "toggle-left", name: "Toggle left sidebar", hotkey: "Ctrl+Shift+L", run: () => (app.showLeft = !app.showLeft) },
   { id: "toggle-right", name: "Toggle right sidebar", hotkey: "Ctrl+Shift+R", run: () => (app.showRight = !app.showRight) },
   { id: "save", name: "Save", hotkey: "Ctrl+S", run: () => { const d = app.activeDoc; if (d) return app.save(d); } },
+  { id: "settings", name: "Open settings", hotkey: "Ctrl+,", run: () => (app.settings = true) },
   {
     id: "memory-toggle",
     name: "Memory: turn on or off",

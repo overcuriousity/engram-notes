@@ -15,6 +15,7 @@
   import AllProperties from "./components/AllProperties.svelte";
   import Palette from "./components/Palette.svelte";
   import StatusBar from "./components/StatusBar.svelte";
+  import Settings from "./components/Settings.svelte";
 
   $effect(() => {
     const t = app.config?.theme ?? "system";
@@ -76,5 +77,6 @@
     <StatusBar />
   </div>
   <Palette />
+  {#if app.settings}<Settings />{/if}
 {/if}
 {#if app.toast}<div class="toast">{app.toast}</div>{/if}

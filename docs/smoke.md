@@ -50,4 +50,17 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
     where the association is stronger, and the global graph still has none.
 40. *Embedding: choose the model folder* on a folder with the ONNX file and
     tokenizer loads it with no network, and the vectors are rebuilt.
-41. `cargo test --workspace` and `pnpm check && pnpm test` pass.
+41. The properties of a note are edited in a block above its text and scroll
+    away with it; *+ Add property* adds one and it lands in the frontmatter.
+42. Back and forward in the tab header walk the notes that tab has shown;
+    following a link navigates in place, `+` and Ctrl-click open a tab.
+43. The reading toggle in the tab header switches the note and back.
+44. The ribbon's six icons run their commands and the gear opens settings;
+    changing the theme there takes effect at once and survives a restart.
+45. The right sidebar switches between links, properties, all properties with
+    counts, and Related; the choice survives a restart.
+46. The status bar shows backlinks, properties, words and characters for the
+    open note.
+47. The graph's nodes are small and pale and show no labels until zoomed out
+    past the point where they fit.
+48. `cargo test --workspace` and `pnpm check && pnpm test` pass.
