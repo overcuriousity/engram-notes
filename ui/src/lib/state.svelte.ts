@@ -1,6 +1,7 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as api from "./api";
 import * as L from "./layout";
+import * as H from "./history";
 import { fileKind } from "./files";
 import type { Dir, Mode, Node, Pane, TabRef } from "./layout";
 
@@ -113,21 +114,49 @@ class AppStateStore {
     this.docs[path] = { path, text: n.text, savedText: n.text, mtime_ms: n.mtime_ms, conflict: false };
   }
 
-  /** Opens `path` in the active pane, or activates its tab there; `line` scrolls to a 1-based line. */
-  async openNote(path: string, line?: number, kind: api.EventKind = "open", query?: string) {
+  /** Opens `path` in the active tab, as Obsidian does, unless `newTab`. */
+  async openNote(path: string, line?: number, kind: api.EventKind = "open", query?: string, newTab = false) {
     const p = this.pane;
     const i = p.tabs.findIndex((t) => t.path === path);
     if (i >= 0) {
       this.activate(p.id, i);
-    } else {
+    } else if (fileKind(path) !== "note" || newTab || p.active < 0) {
+      // A graph or a base gets its own tab; so does an explicit new one.
       if (fileKind(path) === "note") await this.load(path);
       p.tabs.push({ path, mode: this.config?.editor.default_mode ?? "live" });
       p.active = p.tabs.length - 1;
+      this.persist();
+    } else {
+      await this.load(path);
+      H.visit(p.tabs[p.active], path);
       this.persist();
     }
     if (line) this.jump = { pane: p.id, path, line };
     // Memory is a nicety: recording never blocks the open and never toasts.
     void api.recordEvent(kind, path, query).catch(() => {});
+  }
+
+  /** Obsidian's back and forward, over the notes this tab has shown. */
+  async step(paneId: number, dir: "back" | "forward") {
+    const p = L.findPane(this.layout, paneId);
+    const t = p && p.active >= 0 ? p.tabs[p.active] : null;
+    if (!t) return;
+    const path = dir === "back" ? H.back(t) : H.forward(t);
+    if (!path) return;
+    try {
+      if (fileKind(path) === "note") await this.load(path);
+    } catch {
+      return; // the note is gone; the history entry is stale
+    }
+    this.persist();
+  }
+
+  /** Obsidian's `+`: an empty tab, ready for the quick switcher. */
+  newTab() {
+    const p = this.pane;
+    p.tabs.push({ path: "", mode: this.config?.editor.default_mode ?? "live" });
+    p.active = p.tabs.length - 1;
+    this.persist();
   }
 
   openFromSearch(path: string, line: number | undefined, query: string) {

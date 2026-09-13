@@ -1,6 +1,12 @@
 export type Mode = "live" | "source" | "reading";
 export type Dir = "row" | "column";
-export interface TabRef { path: string; mode: Mode }
+export interface TabRef {
+  path: string;
+  mode: Mode;
+  /** Where this tab has been, and where it came back from: Obsidian's per-tab history. */
+  back?: string[];
+  fwd?: string[];
+}
 export interface Pane { kind: "pane"; id: number; tabs: TabRef[]; active: number }
 export interface Split { kind: "split"; id: number; dir: Dir; sizes: number[]; children: Node[] }
 export type Node = Pane | Split;
