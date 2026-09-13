@@ -2,6 +2,7 @@
 
 pub mod bases;
 pub mod config;
+pub mod embed;
 pub mod error;
 pub mod frontmatter;
 pub mod graph;

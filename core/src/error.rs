@@ -20,6 +20,8 @@ pub enum Error {
     Exists(String),
     #[error("base error: {0}")]
     Base(String),
+    #[error("embedding error: {0}")]
+    Embed(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
