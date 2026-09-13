@@ -37,6 +37,7 @@ const mock = `
         case "get_config": return FX.config;
         case "read_note": { const f = file(args.path); if (!f) throw { code: "not_found", message: "not found: " + args.path }; return { path: f.path, text: f.text, mtime_ms: 0 }; }
         case "tags": return FX.tags ?? [];
+        case "all_properties": return FX.allProperties ?? [];
         case "backlinks": return FX.backlinks?.[args.path] ?? [];
         case "outgoing": return FX.outgoing?.[args.path] ?? [];
         case "properties": return FX.properties?.[args.path] ?? {};

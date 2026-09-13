@@ -24,6 +24,7 @@ export interface LinkRow {
 }
 export interface Unresolved { target: string; count: number }
 export interface TagCount { tag: string; count: number }
+export interface PropertyCount { key: string; count: number }
 export interface Hit {
   path: string; title: string; snippet: string; heading: string | null; line: number;
   similarity: number | null; score: number; past_divider: boolean; primed: boolean;
@@ -63,6 +64,7 @@ export const unresolved = () => invoke<Unresolved[]>("unresolved");
 export const resolveLink = (target: string) => invoke<string | null>("resolve_link", { target });
 export const titles = () => invoke<[string, string][]>("titles");
 export const tags = () => invoke<TagCount[]>("tags");
+export const allProperties = () => invoke<PropertyCount[]>("all_properties");
 export const properties = (path: string) => invoke<Record<string, unknown>>("properties", { path });
 export const setProperty = (path: string, key: string, value: unknown) => invoke<void>("set_property", { path, key, value });
 export const search = (query: string, limit = 50) => invoke<SearchResults>("search", { query, limit });

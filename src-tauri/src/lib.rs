@@ -47,6 +47,7 @@ pub fn run() {
             commands::record_event,
             commands::related,
             commands::forget_memory,
+            commands::all_properties,
             commands::embed_status,
             commands::typing,
             commands::semantic_edges,

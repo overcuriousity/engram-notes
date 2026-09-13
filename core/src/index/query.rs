@@ -30,6 +30,12 @@ pub struct Unresolved {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PropertyCount {
+    pub key: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct TagCount {
     pub tag: String,
     pub count: i64,
@@ -173,11 +179,60 @@ impl Index {
             .optional()?)
     }
 
+    /// Every property key in the vault and how many notes carry it.
+    pub fn property_counts(&self) -> Result<Vec<PropertyCount>> {
+        Ok(self
+            .conn
+            .prepare(
+                "SELECT key, count(*) FROM properties GROUP BY key
+                 ORDER BY count(*) DESC, key",
+            )?
+            .query_map([], |r| {
+                Ok(PropertyCount {
+                    key: r.get(0)?,
+                    count: r.get(1)?,
+                })
+            })?
+            .collect::<std::result::Result<_, _>>()?)
+    }
+
     pub fn titles(&self) -> Result<Vec<(String, String)>> {
         Ok(self
             .conn
             .prepare("SELECT path, title FROM notes ORDER BY path")?
             .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
             .collect::<std::result::Result<_, _>>()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::index::Index;
+    use crate::vault::Vault;
+
+    fn indexed(files: &[(&str, &str)]) -> (tempfile::TempDir, Index) {
+        let d = tempfile::tempdir().unwrap();
+        for (path, text) in files {
+            std::fs::write(d.path().join(path), text).unwrap();
+        }
+        let v = Vault::open(d.path()).unwrap();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        (d, ix)
+    }
+
+    #[test]
+    fn property_counts_are_ordered_by_use() {
+        let (_d, ix) = indexed(&[
+            ("A.md", "---\nstatus: open\ntags: [x]\n---\na"),
+            ("B.md", "---\nstatus: done\n---\nb"),
+            ("C.md", "no frontmatter"),
+        ]);
+        let counts = ix.property_counts().unwrap();
+        assert_eq!(counts[0].key, "status");
+        assert_eq!(counts[0].count, 2);
+        assert_eq!(counts[1].key, "tags");
+        assert_eq!(counts[1].count, 1);
+        assert_eq!(counts.len(), 2);
     }
 }

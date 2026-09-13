@@ -4,7 +4,7 @@ use crate::state::{AppState, Open};
 use engram_core::bases::{SortKey, Table};
 use engram_core::config::{self, AppConfig};
 use engram_core::graph::{Graph, SemanticEdge};
-use engram_core::index::query::{LinkRow, TagCount, Unresolved};
+use engram_core::index::query::{LinkRow, PropertyCount, TagCount, Unresolved};
 use engram_core::index::{Index, RebuildStats};
 use engram_core::memory::{EventKind, related::Related};
 use engram_core::rename::RenamePlan;
@@ -430,6 +430,11 @@ pub fn related(state: State<AppState>, path: String) -> CmdResult<Related> {
             10,
         )?)
     })
+}
+
+#[tauri::command]
+pub fn all_properties(state: State<AppState>) -> CmdResult<Vec<PropertyCount>> {
+    with_open(&state, |o| Ok(o.index.property_counts()?))
 }
 
 #[tauri::command]

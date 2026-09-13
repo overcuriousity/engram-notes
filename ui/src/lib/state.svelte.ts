@@ -28,6 +28,7 @@ class AppStateStore {
   palette = $state<"none" | "files" | "commands">("none");
   settings = $state(false);
   leftPane = $state<"files" | "search">("files");
+  rightPane = $state<"note" | "props" | "all" | "related">("note");
   watching = $state(true);
   jump = $state<{ pane: number; path: string; line: number } | null>(null);
   folders = $state<string[]>([]);
@@ -99,6 +100,8 @@ class AppStateStore {
     for (const p of L.panes(layout)) p.active = Math.min(Math.max(p.active, 0), p.tabs.length - 1);
     this.layout = layout;
     this.nextId = L.maxId(layout) + 1;
+    const right = ws.rightPane;
+    if (right === "note" || right === "props" || right === "all" || right === "related") this.rightPane = right;
     const wanted = Number(ws.activePane);
     this.activePane = L.findPane(layout, wanted) ? wanted : L.panes(layout)[0].id;
   }
@@ -301,7 +304,7 @@ class AppStateStore {
 
   persist() {
     if (!this.root) return;
-    void api.setWorkspace({ layout: $state.snapshot(this.layout), activePane: this.activePane });
+    void api.setWorkspace({ layout: $state.snapshot(this.layout), activePane: this.activePane, rightPane: this.rightPane });
   }
 
   say(msg: string) {

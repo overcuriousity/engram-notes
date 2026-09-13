@@ -12,6 +12,7 @@
   import Outgoing from "./components/Outgoing.svelte";
   import Properties from "./components/Properties.svelte";
   import Related from "./components/Related.svelte";
+  import AllProperties from "./components/AllProperties.svelte";
   import Palette from "./components/Palette.svelte";
   import StatusBar from "./components/StatusBar.svelte";
 
@@ -59,7 +60,18 @@
       <Workspace node={app.layout} />
     </main>
     <aside class="sidebar right">
-      {#if app.showRight}<Backlinks /><Outgoing /><Properties /><Related />{/if}
+      {#if app.showRight}
+        <div class="panestrip">
+          <button class:active={app.rightPane === "note"} title="Links" onclick={() => (app.rightPane = "note")}>⇄</button>
+          <button class:active={app.rightPane === "props"} title="Properties" onclick={() => (app.rightPane = "props")}>▤</button>
+          <button class:active={app.rightPane === "all"} title="All properties" onclick={() => (app.rightPane = "all")}>≣</button>
+          <button class:active={app.rightPane === "related"} title="Related" onclick={() => (app.rightPane = "related")}>◍</button>
+        </div>
+        {#if app.rightPane === "note"}<Backlinks /><Outgoing />
+        {:else if app.rightPane === "props"}<Properties />
+        {:else if app.rightPane === "all"}<AllProperties />
+        {:else}<Related />{/if}
+      {/if}
     </aside>
     <StatusBar />
   </div>
