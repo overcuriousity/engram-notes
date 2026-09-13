@@ -90,7 +90,15 @@
     if (!view || !jump) return;
     const doc = view.state.doc;
     const line = doc.line(Math.min(Math.max(jump.line, 1), doc.lines));
-    view.dispatch({ selection: { anchor: line.from }, effects: EditorView.scrollIntoView(line.from, { y: "start", yMargin: 24 }) });
+    view.dispatch({ selection: { anchor: line.from } });
+    // The pane is the scroller now, so scroll the line into that, not into
+    // CodeMirror's own scroller, which no longer moves.
+    const rect = view.coordsAtPos(line.from);
+    const box = host.closest(".note");
+    if (rect && box) {
+      const top = rect.top - box.getBoundingClientRect().top + box.scrollTop;
+      box.scrollTo({ top: Math.max(0, top - 24) });
+    }
     view.focus();
     onJumped();
   });
