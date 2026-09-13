@@ -425,6 +425,7 @@ pub fn related(state: State<AppState>, path: String) -> CmdResult<Related> {
             &path,
             &text,
             &o.config.memory,
+            &o.config.search,
             now(),
             10,
         )?)
@@ -448,6 +449,7 @@ pub fn semantic_edges(
             paths.as_deref(),
             top_k.unwrap_or(3),
             &o.config.memory,
+            &o.config.search,
             now(),
         )?)
     })

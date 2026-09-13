@@ -45,6 +45,11 @@ pub struct SearchConfig {
     pub rrf_k: f64,
     pub cliff_factor: f32,
     pub cliff_min_share: f32,
+    /// A cosine below this says nothing, so the hit is a stranger. e5's band is
+    /// narrow — two notes with nothing in common still score about 0.76 — and
+    /// this is what tells a neighbour from one. Measured for
+    /// `multilingual-e5-small`; a different model needs a different number.
+    pub similarity_floor: f32,
 }
 
 impl Default for SearchConfig {
@@ -54,6 +59,7 @@ impl Default for SearchConfig {
             rrf_k: crate::search::fuse::RRF_K,
             cliff_factor: crate::search::fuse::CLIFF_FACTOR,
             cliff_min_share: crate::search::fuse::CLIFF_MIN_SHARE,
+            similarity_floor: 0.83,
         }
     }
 }
@@ -277,6 +283,7 @@ mod tests {
         assert_eq!(cfg.search.candidate_multiplier, 3);
         assert_eq!(cfg.search.rrf_k, 60.0);
         assert_eq!(cfg.search.cliff_factor, 3.0);
+        assert_eq!(cfg.search.similarity_floor, 0.83);
         assert!(cfg.memory.enabled);
         assert_eq!(cfg.memory.activation_half_life_days, 30.0);
         assert_eq!(cfg.memory.assoc_half_life_days, 90.0);

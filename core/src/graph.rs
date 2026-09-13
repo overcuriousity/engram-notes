@@ -141,6 +141,7 @@ pub fn semantic_edges(
     paths: Option<&[String]>,
     top_k: usize,
     cfg: &crate::config::MemoryConfig,
+    search: &crate::config::SearchConfig,
     at: i64,
 ) -> Result<Vec<SemanticEdge>> {
     let all: Vec<String>;
@@ -169,7 +170,7 @@ pub fn semantic_edges(
         }
     }
     for path in subset {
-        for hit in index.similar_to(std::slice::from_ref(path), top_k)? {
+        for hit in index.similar_to(std::slice::from_ref(path), top_k, search.similarity_floor)? {
             let (a, b) = if *path < hit.path {
                 (path.clone(), hit.path.clone())
             } else {
@@ -243,6 +244,13 @@ mod tests {
         );
     }
 
+    fn loose() -> crate::config::SearchConfig {
+        crate::config::SearchConfig {
+            similarity_floor: 0.0,
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn semantic_edges_carry_associations_and_near_passages() {
         use crate::config::MemoryConfig;
@@ -266,7 +274,7 @@ mod tests {
             .unwrap();
 
         // Undirected: a pair is stored and drawn with the smaller path first.
-        let all = semantic_edges(&ix, None, 1, &cfg, 0).unwrap();
+        let all = semantic_edges(&ix, None, 1, &cfg, &loose(), 0).unwrap();
         assert!(all.iter().any(|e| e.kind == SemanticKind::Assoc
             && e.source == "Coffee.md"
             && e.target == "Rust.md"));
@@ -302,7 +310,8 @@ mod tests {
         let cfg = MemoryConfig::default();
         ix.bump_assoc("A.md", "B.md", 5.0, None, &cfg, 0).unwrap();
         ix.bump_assoc("B.md", "C.md", 5.0, None, &cfg, 0).unwrap();
-        let only_a = semantic_edges(&ix, Some(&["A.md".to_string()]), 3, &cfg, 0).unwrap();
+        let only_a =
+            semantic_edges(&ix, Some(&["A.md".to_string()]), 3, &cfg, &loose(), 0).unwrap();
         assert_eq!(only_a.len(), 1);
         assert_eq!(only_a[0].target, "B.md");
     }

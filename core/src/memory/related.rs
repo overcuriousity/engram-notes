@@ -2,7 +2,7 @@
 //! links it could have.
 
 use crate::Result;
-use crate::config::MemoryConfig;
+use crate::config::{MemoryConfig, SearchConfig};
 use crate::index::Index;
 use crate::search::Associated;
 use std::collections::HashSet;
@@ -29,6 +29,7 @@ pub fn related(
     path: &str,
     text: &str,
     cfg: &MemoryConfig,
+    search: &SearchConfig,
     at: i64,
     limit: usize,
 ) -> Result<Related> {
@@ -51,7 +52,7 @@ pub fn related(
         false => vec![],
     };
     let similar: Vec<SimilarNote> = index
-        .similar_to(&[path.to_owned()], limit)?
+        .similar_to(&[path.to_owned()], limit, search.similarity_floor)?
         .into_iter()
         .map(|h| SimilarNote {
             title: titles
@@ -85,11 +86,20 @@ pub fn related(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::MemoryConfig;
+    use crate::config::{MemoryConfig, SearchConfig};
     use crate::embed::{Embedder, FakeEmbedder};
     use crate::index::Index;
     use crate::vault::Vault;
     use std::fs;
+
+    // The fake embedder's cosines are not e5's; these tests are about which
+    // notes come back, not where the floor sits.
+    fn loose() -> SearchConfig {
+        SearchConfig {
+            similarity_floor: 0.0,
+            ..SearchConfig::default()
+        }
+    }
 
     fn ix() -> (tempfile::TempDir, Index) {
         let d = tempfile::tempdir().unwrap();
@@ -126,7 +136,16 @@ mod tests {
     fn similar_lists_other_notes_nearest_first() {
         let (_d, ix) = ix();
         let text = "# Rust\nownership rules keep memory safe. see [[Borrow]]";
-        let r = related(&ix, "Rust.md", text, &MemoryConfig::default(), 0, 10).unwrap();
+        let r = related(
+            &ix,
+            "Rust.md",
+            text,
+            &MemoryConfig::default(),
+            &loose(),
+            0,
+            10,
+        )
+        .unwrap();
         assert!(r.similar.iter().all(|s| s.path != "Rust.md"));
         assert_eq!(r.similar[0].path, "Borrow.md");
         assert_eq!(r.similar[0].heading, "Borrow");
@@ -136,7 +155,16 @@ mod tests {
     fn a_note_already_linked_is_not_suggested() {
         let (_d, ix) = ix();
         let text = "# Rust\nownership rules keep memory safe. see [[Borrow]]";
-        let r = related(&ix, "Rust.md", text, &MemoryConfig::default(), 0, 10).unwrap();
+        let r = related(
+            &ix,
+            "Rust.md",
+            text,
+            &MemoryConfig::default(),
+            &loose(),
+            0,
+            10,
+        )
+        .unwrap();
         assert!(r.suggested.iter().all(|s| s.path != "Borrow.md"));
         assert!(r.suggested.iter().any(|s| s.path == "Lifetimes.md"));
     }
@@ -145,7 +173,16 @@ mod tests {
     fn a_title_the_text_already_names_is_not_suggested() {
         let (_d, ix) = ix();
         let text = "# Rust\nownership rules; lifetimes matter too";
-        let r = related(&ix, "Rust.md", text, &MemoryConfig::default(), 0, 10).unwrap();
+        let r = related(
+            &ix,
+            "Rust.md",
+            text,
+            &MemoryConfig::default(),
+            &loose(),
+            0,
+            10,
+        )
+        .unwrap();
         assert!(r.suggested.iter().all(|s| s.path != "Lifetimes.md"));
     }
 
@@ -155,11 +192,11 @@ mod tests {
         let mut cfg = MemoryConfig::default();
         ix.bump_assoc("Rust.md", "Coffee.md", 5.0, Some("why"), &cfg, 0)
             .unwrap();
-        let r = related(&ix, "Rust.md", "x", &cfg, 0, 10).unwrap();
+        let r = related(&ix, "Rust.md", "x", &cfg, &loose(), 0, 10).unwrap();
         assert_eq!(r.associated[0].path, "Coffee.md");
         assert_eq!(r.associated[0].cue.as_deref(), Some("why"));
         cfg.enabled = false;
-        let off = related(&ix, "Rust.md", "x", &cfg, 0, 10).unwrap();
+        let off = related(&ix, "Rust.md", "x", &cfg, &loose(), 0, 10).unwrap();
         assert!(off.associated.is_empty());
         assert!(!off.similar.is_empty(), "similar is shown with memory off");
     }

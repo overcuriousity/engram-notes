@@ -140,8 +140,9 @@ impl Index {
         Ok(hits)
     }
 
-    /// Passages of other notes nearest to any passage of `paths`, one per note.
-    pub fn similar_to(&self, paths: &[String], limit: usize) -> Result<Vec<VecHit>> {
+    /// Passages of other notes nearest to any passage of `paths`, one per note,
+    /// and only those near enough to mean something.
+    pub fn similar_to(&self, paths: &[String], limit: usize, floor: f32) -> Result<Vec<VecHit>> {
         let mut mine: Vec<Vec<f32>> = Vec::new();
         {
             let mut stmt = self.conn().prepare(
@@ -191,6 +192,7 @@ impl Index {
                 .total_cmp(&a.similarity)
                 .then(a.path.cmp(&b.path))
         });
+        out.retain(|h| h.similarity >= floor);
         out.truncate(limit);
         Ok(out)
     }
@@ -259,7 +261,7 @@ mod tests {
     #[test]
     fn similar_to_skips_the_note_itself() {
         let (_d, ix) = embedded();
-        let hits = ix.similar_to(&["Rust.md".to_string()], 10).unwrap();
+        let hits = ix.similar_to(&["Rust.md".to_string()], 10, 0.0).unwrap();
         assert!(hits.iter().all(|h| h.path != "Rust.md"));
         assert_eq!(hits[0].path, "Coffee.md");
     }

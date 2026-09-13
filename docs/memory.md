@@ -16,6 +16,28 @@ characters, the heading path prepended before embedding. A vector is keyed by
 the hash of that text, so an unchanged passage in a renamed or re-saved note
 keeps it.
 
+**The floor.** A cosine below `similarity_floor` (0.83) says nothing, and the
+hit is a stranger. This is not in the spec; it is here because the model needs
+it. Measured over the 45 note pairs of a ten-note demo vault,
+`multilingual-e5-small` puts every pair between 0.755 and 0.891 — two notes
+with nothing whatever in common still score 0.755, and the median is 0.807. Any
+rule that reads such a cosine as a similarity calls the whole vault related to
+everything, which is what the first build did. Same-folder pairs have a median
+of 0.828 and a minimum of 0.772, cross-folder a median of 0.791 and a maximum
+of 0.866, so the two populations overlap and no threshold is clean; 0.83 is
+where it separates them best on that vault. The number belongs to this model,
+and a model loaded from a folder may want another.
+
+A relative band on top of the floor (`max(floor, best - 0.04)`) was tried and
+dropped: over the same pairs it changed the answer for two notes of ten and in
+both it deleted a real neighbour — Borrowing lost Index at 0.832, Smart
+pointers lost Error handling at 0.838 — while never adding one. Tightening
+around a standout is the cliff's job already.
+
+The floor is a hard cut in the Related pane and on the graph's dashed edges. In
+search it draws the line instead: the hits stay in the list, as the spec wants,
+with the strangers below it.
+
 **The divider** is engram's cliff, not the spec's fraction of the top score.
 Over the cosine similarities sorted descending, at least three of them, the
 largest gap must exceed `3.0 ×` the mean of the other gaps and `0.01 ×` the top
@@ -25,6 +47,12 @@ last hit that still reaches the cut", so what is marked is always a tail: a
 fused list is not in score order, and reading it position by position would cut
 away the good hits sitting below a weaker one. Everything from the fall on is
 marked loose, kept in rank order, and shown smaller.
+
+The line is the later of the two readings, so whichever leaves more hits
+standing wins. The cliff alone put one hit above the line for *who frees the
+memory* and called Borrowing and Smart pointers loose; the floor keeps them,
+because a fall inside a list of neighbours is not the same thing as the edge of
+what the vault knows.
 
 **The model** is `multilingual-e5-small`, unquantized: fastembed 6.1 ships no
 quantized e5-small, though the spec asks for one. A quantized ONNX still loads

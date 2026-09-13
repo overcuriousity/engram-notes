@@ -18,7 +18,7 @@ describe("commands", () => {
       daily_notes: { folder: "Daily", template: null, format: "%Y-%m-%d" },
       hotkeys: { "new-note": "Ctrl+Alt+N" },
       theme: "system",
-      search: { candidate_multiplier: 3, rrf_k: 60, cliff_factor: 3, cliff_min_share: 0.01 },
+      search: { candidate_multiplier: 3, rrf_k: 60, cliff_factor: 3, cliff_min_share: 0.01, similarity_floor: 0.83 },
       memory: {
         enabled: true, activation_half_life_days: 30, assoc_half_life_days: 90,
         sitting_gap_secs: 1800, assoc_window_secs: 600, assoc_show: 2,

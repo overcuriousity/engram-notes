@@ -1,5 +1,6 @@
 //! Reciprocal rank fusion, and engram's cliff for the relevance divider.
 
+use crate::config::SearchConfig;
 use crate::search::Hit;
 use std::collections::HashMap;
 
@@ -64,25 +65,36 @@ pub fn cliff(scores: &[f32], factor: f32, min_share: f32) -> Option<usize> {
 /// tail. A fused list is not in score order -- a hit both branches found sits
 /// above one only the dense branch ranked higher -- and reading it position by
 /// position would cut the good hits below that one away.
-pub fn mark_past_divider(hits: &mut [Hit], factor: f32, min_share: f32) {
+pub fn mark_past_divider(hits: &mut [Hit], cfg: &SearchConfig) {
     let mut sorted: Vec<f32> = hits.iter().filter_map(|h| h.similarity).collect();
-    sorted.sort_by(|a, b| b.total_cmp(a));
-    let Some(above) = cliff(&sorted, factor, min_share) else {
+    if sorted.is_empty() {
         return;
-    };
-    let cut = sorted[above - 1];
-    let from = hits
-        .iter()
-        .rposition(|h| h.similarity.is_some_and(|s| s >= cut))
-        .map_or(0, |i| i + 1);
+    }
+    sorted.sort_by(|a, b| b.total_cmp(a));
+    // The later of two readings, so whichever leaves more hits standing wins:
+    // the cliff finds a fall within the list, the floor knows that a cosine can
+    // be the best one here and still mean nothing.
+    let by_cliff = cliff(&sorted, cfg.cliff_factor, cfg.cliff_min_share)
+        .map(|above| tail_from(hits, sorted[above - 1]));
+    let by_floor = tail_from(hits, cfg.similarity_floor);
+    let from = by_cliff.unwrap_or(0).max(by_floor);
     for h in hits.iter_mut().skip(from) {
         h.past_divider = true;
     }
 }
 
+// The place after the last hit that still reaches `cut`, so what is marked is
+// always a tail.
+fn tail_from(hits: &[Hit], cut: f32) -> usize {
+    hits.iter()
+        .rposition(|h| h.similarity.is_some_and(|s| s >= cut))
+        .map_or(0, |i| i + 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::SearchConfig;
     use crate::search::Hit;
 
     fn hit(path: &str, similarity: Option<f32>) -> Hit {
@@ -127,17 +139,17 @@ mod tests {
 
     #[test]
     fn marking_leaves_a_tail_even_when_the_list_is_out_of_order() {
-        // Fusion put 0.40 above 0.78 and 0.76. Read position by position the
+        // Fusion put 0.40 above 0.87 and 0.86. Read position by position the
         // largest gap is the first one, and the two good hits below it would be
         // thrown away; read over the sorted scores the fall is before 0.39.
         let mut hits = vec![
-            hit("a.md", Some(0.80)),
+            hit("a.md", Some(0.88)),
             hit("b.md", Some(0.40)),
-            hit("c.md", Some(0.78)),
-            hit("d.md", Some(0.76)),
+            hit("c.md", Some(0.87)),
+            hit("d.md", Some(0.86)),
             hit("e.md", Some(0.39)),
         ];
-        mark_past_divider(&mut hits, CLIFF_FACTOR, CLIFF_MIN_SHARE);
+        mark_past_divider(&mut hits, &SearchConfig::default());
         assert_eq!(
             hits.iter().map(|h| h.past_divider).collect::<Vec<_>>(),
             vec![false, false, false, false, true]
@@ -147,12 +159,12 @@ mod tests {
     #[test]
     fn a_hit_without_a_similarity_is_never_the_line_itself() {
         let mut hits = vec![
-            hit("a.md", Some(0.80)),
+            hit("a.md", Some(0.88)),
             hit("b.md", None),
-            hit("c.md", Some(0.78)),
+            hit("c.md", Some(0.86)),
             hit("d.md", Some(0.05)),
         ];
-        mark_past_divider(&mut hits, CLIFF_FACTOR, CLIFF_MIN_SHARE);
+        mark_past_divider(&mut hits, &SearchConfig::default());
         assert!(!hits[1].past_divider);
         assert!(hits[3].past_divider);
     }
@@ -164,7 +176,49 @@ mod tests {
             hit("b.md", Some(0.88)),
             hit("c.md", Some(0.86)),
         ];
-        mark_past_divider(&mut hits, CLIFF_FACTOR, CLIFF_MIN_SHARE);
+        mark_past_divider(&mut hits, &SearchConfig::default());
         assert!(hits.iter().all(|h| !h.past_divider));
+    }
+
+    #[test]
+    fn the_floor_draws_the_line_where_the_cliff_finds_no_fall() {
+        // Evenly spaced, so the cliff says nothing; the last two are strangers.
+        let mut hits = vec![
+            hit("a.md", Some(0.87)),
+            hit("b.md", Some(0.85)),
+            hit("c.md", Some(0.84)),
+            hit("d.md", Some(0.79)),
+            hit("e.md", Some(0.77)),
+        ];
+        mark_past_divider(&mut hits, &SearchConfig::default());
+        assert_eq!(
+            hits.iter().map(|h| h.past_divider).collect::<Vec<_>>(),
+            vec![false, false, false, true, true]
+        );
+    }
+
+    #[test]
+    fn the_line_is_wherever_leaves_more_hits_standing() {
+        // What the vault showed: the cliff cut after the standout and called
+        // three real neighbours loose. The floor keeps them.
+        let mut hits = vec![
+            hit("a.md", Some(0.95)),
+            hit("b.md", Some(0.86)),
+            hit("c.md", Some(0.855)),
+            hit("d.md", Some(0.85)),
+        ];
+        mark_past_divider(&mut hits, &SearchConfig::default());
+        assert!(hits.iter().all(|h| !h.past_divider));
+    }
+
+    #[test]
+    fn a_whole_list_of_strangers_is_all_loose() {
+        let mut hits = vec![
+            hit("a.md", Some(0.78)),
+            hit("b.md", Some(0.77)),
+            hit("c.md", Some(0.76)),
+        ];
+        mark_past_divider(&mut hits, &SearchConfig::default());
+        assert!(hits.iter().all(|h| h.past_divider));
     }
 }

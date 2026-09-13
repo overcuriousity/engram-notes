@@ -118,7 +118,7 @@ pub fn hybrid(
         let activation = index.activation_map(at, mem.activation_half_life_days)?;
         crate::memory::prime::prime(&mut hits, &activation, mem.prime_margin, mem.prime_lift);
     }
-    fuse::mark_past_divider(&mut hits, cfg.cliff_factor, cfg.cliff_min_share);
+    fuse::mark_past_divider(&mut hits, cfg);
     let associated = match mem.enabled {
         true => crate::memory::spread::spread(index, &hits, mem, at)?,
         false => vec![],
