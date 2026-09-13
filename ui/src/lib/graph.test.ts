@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Graph } from "./api";
-import { DEFAULTS, filterGraph, labelAlpha, parseSearch, radius, readSettings, searchWords, type GraphSettings, type ViewGraph } from "./graph";
+import { DEFAULTS, filterGraph, fitView, hitRadius, labelAlpha, parseSearch, radius, readSettings, searchWords, type GraphSettings, type ViewGraph } from "./graph";
 
 const g: Graph = {
   nodes: [
@@ -87,5 +87,30 @@ describe("graph filters", () => {
     expect(labelAlpha(1.35, 0)).toBe(1);
     // The slider still moves the threshold.
     expect(labelAlpha(1.0, 3)).toBeGreaterThan(0);
+  });
+
+  it("gives a small node a hit target the pointer can actually reach", () => {
+    // A 2px node at half zoom is 1px on screen; the target stays 10 screen px.
+    expect(hitRadius(2, 0.5)).toBeCloseTo(20, 5);
+    // A large node keeps its own radius plus a little slack.
+    expect(hitRadius(40, 1)).toBeCloseTo(44, 5);
+    expect(hitRadius(40, 2)).toBeCloseTo(42, 5);
+  });
+
+  it("fits the view to the points it is given", () => {
+    const pts = [
+      { x: -100, y: -50, r: 4 },
+      { x: 100, y: 50, r: 4 },
+    ];
+    const v = fitView(pts, 800, 400);
+    expect(v.k).toBeGreaterThan(1);
+    expect(v.k).toBeLessThanOrEqual(2);
+    // The box is centred on the origin, so the view centres the canvas on it.
+    expect(v.x).toBeCloseTo(400, 5);
+    expect(v.y).toBeCloseTo(200, 5);
+  });
+
+  it("leaves the view alone when there is nothing to fit", () => {
+    expect(fitView([], 800, 400)).toEqual({ x: 400, y: 200, k: 1 });
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { closeTab, findPane, maxId, panes, removePane, renamePath, split, withoutPath, type Node, type Pane } from "./layout";
+import { closeTab, findPane, maxId, otherPaneId, panes, removePane, renamePath, split, withoutPath, type Node, type Pane } from "./layout";
 
 const pane = (id: number, ...paths: string[]): Pane => ({
   kind: "pane",
@@ -58,5 +58,18 @@ describe("folders in the layout", () => {
     };
     expect(panes(renamePath(root, "d", "x/d"))[0].tabs.map((t) => t.path)).toEqual(["x/d/a.md", "d.md", "x/d/e/b.md"]);
     expect(panes(withoutPath(root, "d"))[0].tabs.map((t) => t.path)).toEqual(["d.md"]);
+  });
+
+  it("names the pane a note should open into beside the active one", () => {
+    const one: Node = { kind: "pane", id: 1, tabs: [], active: -1 };
+    expect(otherPaneId(one, 1)).toBeNull();
+    const two: Node = {
+      kind: "split", id: 9, dir: "row", sizes: [0.5, 0.5],
+      children: [one, { kind: "pane", id: 2, tabs: [], active: -1 }],
+    };
+    expect(otherPaneId(two, 1)).toBe(2);
+    expect(otherPaneId(two, 2)).toBe(1);
+    // An id that is not in the tree falls back to the first pane.
+    expect(otherPaneId(two, 99)).toBe(1);
   });
 });

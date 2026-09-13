@@ -110,3 +110,9 @@ export function renamePath(root: Node, from: string, to: string): Node {
     tabs: p.tabs.map((t) => (under(t.path, from) ? { ...t, path: to + t.path.slice(from.length) } : t)),
   }));
 }
+
+/** The pane a note should open into beside `activeId`, or null when that is the only one. */
+export function otherPaneId(root: Node, activeId: number): number | null {
+  const other = panes(root).find((p) => p.id !== activeId);
+  return other?.id ?? null;
+}

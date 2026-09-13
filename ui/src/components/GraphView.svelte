@@ -3,7 +3,7 @@
   import { forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationNodeDatum } from "d3-force";
   import { app } from "../lib/state.svelte";
   import { createNote, errorMessage, getGraphConfig, graph as loadGraph, search, semanticEdges, setGraphConfig, type Graph, type SemanticEdge } from "../lib/api";
-  import { DEFAULTS, filterGraph, forces, labelAlpha, radius, readSettings, searchWords, type GraphSettings, type ViewGraph, type ViewNode } from "../lib/graph";
+  import { DEFAULTS, filterGraph, fitView, forces, hitRadius, labelAlpha, radius, readSettings, searchWords, type GraphSettings, type ViewGraph, type ViewNode } from "../lib/graph";
   import { weightBucket, type DrawEdge } from "../lib/semantic";
 
   let { local }: { local: boolean } = $props();
@@ -31,8 +31,12 @@
   let size = { w: 0, h: 0 };
   let hover: Node | null = null;
   let near = new Set<Node>();
-  let press: { sx: number; sy: number; vx: number; vy: number; node: Node | null; moved: boolean } | null = null;
+  let press: { sx: number; sy: number; vx: number; vy: number; node: Node | null; moved: boolean; other: boolean } | null = null;
   let frame = 0;
+  // A wheel notch or a fit sets a target the view slides to; a drag moves it outright.
+  let target: { x: number; y: number; k: number } | null = null;
+  let easing = 0;
+  let fitPending = false;
 
   const say = (e: unknown) => app.say(errorMessage(e));
   const center = $derived(local ? app.lastNote : null);
@@ -57,6 +61,7 @@
       c.removeEventListener("wheel", wheel);
       sim?.stop();
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(easing);
     };
   });
 
@@ -117,7 +122,7 @@
     links = g.edges.map((e) => ({ source: byId.get(e.source)!, target: byId.get(e.target)!, kind: e.kind, weight: e.weight }));
     const degree = new Map<Node, number>();
     for (const l of links) for (const n of [l.source, l.target]) degree.set(n, (degree.get(n) ?? 0) + 1);
-    if (old.size === 0) view.k = Math.min(1.5, Math.max(0.15, Math.sqrt(30 / Math.max(1, nodes.length))));
+    if (old.size === 0) fitPending = true;
     const f = forces(s);
     sim?.stop();
     sim = forceSimulation(nodes)
@@ -126,7 +131,8 @@
       .force("x", forceX<Node>(0).strength(f.center))
       .force("y", forceY<Node>(0).strength(f.center))
       .alpha(old.size ? 0.3 : 1)
-      .on("tick", draw);
+      .on("tick", draw)
+      .on("end", fit);
     hover = null;
     near = new Set();
     draw();
@@ -141,6 +147,32 @@
     c.width = Math.round(box.width * dpr);
     c.height = Math.round(box.height * dpr);
     draw();
+  }
+
+  // Obsidian opens a graph showing all of it; ours does the same once it settles.
+  function fit() {
+    if (!fitPending || !nodes.length || !size.w) return;
+    fitPending = false;
+    target = fitView(nodes.map((n) => ({ x: n.x!, y: n.y!, r: n.r })), size.w, size.h);
+    ease();
+  }
+
+  function ease() {
+    cancelAnimationFrame(easing);
+    const step = () => {
+      const t = target;
+      if (!t) return;
+      const d = { x: t.x - view.x, y: t.y - view.y, k: t.k - view.k };
+      if (Math.abs(d.k) < 1e-4 && Math.hypot(d.x, d.y) < 0.5) {
+        view = { ...t };
+        target = null;
+      } else {
+        view = { x: view.x + d.x * 0.28, y: view.y + d.y * 0.28, k: view.k + d.k * 0.28 };
+        easing = requestAnimationFrame(step);
+      }
+      draw();
+    };
+    easing = requestAnimationFrame(step);
   }
 
   function draw() {
@@ -278,7 +310,7 @@
     let dist = Infinity;
     for (const n of nodes) {
       const d = Math.hypot(n.x! - x, n.y! - y);
-      if (d < n.r + 4 / view.k && d < dist) {
+      if (d < hitRadius(n.r, view.k) && d < dist) {
         best = n;
         dist = d;
       }
@@ -299,10 +331,12 @@
   }
 
   function down(e: PointerEvent) {
+    cancelAnimationFrame(easing);
+    target = null;
     const p = point(e);
     canvas!.setPointerCapture(e.pointerId);
     const node = nodeAt(p.x, p.y);
-    press = { sx: p.sx, sy: p.sy, vx: view.x, vy: view.y, node, moved: false };
+    press = { sx: p.sx, sy: p.sy, vx: view.x, vy: view.y, node, moved: false, other: e.ctrlKey || e.metaKey };
     if (node) {
       node.fx = node.x;
       node.fy = node.y;
@@ -329,19 +363,24 @@
     if (!p?.node) return;
     p.node.fx = p.node.fy = null;
     sim?.alphaTarget(0);
-    if (!p.moved) void openNode(p.node.data);
+    if (!p.moved) void openNode(p.node.data, p.other);
   }
 
   function wheel(e: WheelEvent) {
     e.preventDefault();
     const p = point(e);
-    const k = Math.min(8, Math.max(0.05, view.k * Math.exp(-e.deltaY * 0.0015)));
-    view = { x: p.sx - p.x * k, y: p.sy - p.y * k, k };
-    draw();
+    const from = target ?? view;
+    const k = Math.min(8, Math.max(0.05, from.k * Math.exp(-e.deltaY * 0.0015)));
+    // Zoom about the pointer: the world point under it stays under it.
+    const wx = (p.sx - from.x) / from.k;
+    const wy = (p.sy - from.y) / from.k;
+    target = { x: p.sx - wx * k, y: p.sy - wy * k, k };
+    ease();
   }
 
   // As in Obsidian: a note opens, an unresolved link creates its note, a tag searches for itself.
-  async function openNode(n: ViewNode) {
+  // Ctrl-click sends the note to the other split instead of this one.
+  async function openNode(n: ViewNode, other = false) {
     try {
       if (n.kind === "tag") {
         settings.search = `tag:${n.id}`;
@@ -349,7 +388,10 @@
         const path = /\.md$/i.test(n.id) ? n.id : `${n.id}.md`;
         await createNote(path);
         await app.refresh();
-        await app.openNote(path);
+        if (other) await app.openInOtherPane(path);
+        else await app.openNote(path);
+      } else if (other) {
+        await app.openInOtherPane(n.id);
       } else {
         await app.openNote(n.id);
       }
@@ -387,6 +429,7 @@
       <label><input type="checkbox" bind:checked={settings.hideUnresolved} /> Existing files only</label>
       <label><input type="checkbox" bind:checked={settings.showOrphans} /> Orphans</label>
       <h4>Display</h4>
+      <div class="pane-note">Click a node to open it; Ctrl-click opens it in the other split.</div>
       <label><input type="checkbox" bind:checked={settings.showArrow} /> Arrows</label>
       <label>
         <input

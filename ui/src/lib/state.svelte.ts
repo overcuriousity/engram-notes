@@ -207,6 +207,19 @@ class AppStateStore {
     this.persist();
   }
 
+  /** Ctrl-click from the graph: the note lands in the other pane, and one is made when there is none. */
+  async openInOtherPane(path: string) {
+    const other = L.otherPaneId(this.layout, this.activePane);
+    if (other === null) {
+      const fresh: Pane = { kind: "pane", id: this.nextId++, tabs: [], active: -1 };
+      this.layout = L.split(this.layout, this.pane.id, "row", fresh, this.nextId++);
+      this.activePane = fresh.id;
+    } else {
+      this.activePane = other;
+    }
+    await this.openNote(path);
+  }
+
   resize(splitId: number, sizes: number[]) {
     const s = L.findSplit(this.layout, splitId);
     if (s) s.sizes = sizes;

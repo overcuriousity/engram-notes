@@ -166,3 +166,28 @@ export function forces(s: GraphSettings) {
 export function labelAlpha(scale: number, fade: number): number {
   return Math.min(1, Math.max(0, (scale - 1.1 + fade * 0.05) * 4));
 }
+
+/** How near a pointer must come to a node, in world units: its own radius, or 10 screen pixels. */
+export function hitRadius(r: number, k: number): number {
+  return Math.max(r + 4 / k, 10 / k);
+}
+
+/** The view that shows every point with a margin, centred; the identity view when there are none. */
+export function fitView(
+  points: { x: number; y: number; r: number }[],
+  w: number,
+  h: number,
+): { x: number; y: number; k: number } {
+  if (points.length === 0) return { x: w / 2, y: h / 2, k: 1 };
+  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const p of points) {
+    x0 = Math.min(x0, p.x - p.r);
+    y0 = Math.min(y0, p.y - p.r);
+    x1 = Math.max(x1, p.x + p.r);
+    y1 = Math.max(y1, p.y + p.r);
+  }
+  // Room for the labels under the lowest nodes, and a little air all round.
+  const pad = 48;
+  const k = Math.min(2, Math.max(0.05, Math.min((w - pad * 2) / Math.max(1, x1 - x0), (h - pad * 2) / Math.max(1, y1 - y0))));
+  return { x: w / 2 - ((x0 + x1) / 2) * k, y: h / 2 - ((y0 + y1) / 2) * k, k };
+}
