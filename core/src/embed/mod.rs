@@ -3,6 +3,9 @@
 
 use crate::Result;
 
+#[cfg(feature = "fastembed")]
+pub mod fastembed;
+
 pub trait Embedder: Send {
     /// Identifies the vectors in the index; changing it clears them.
     fn id(&self) -> String;
