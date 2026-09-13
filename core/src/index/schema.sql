@@ -81,3 +81,49 @@ CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
   INSERT INTO notes_fts(notes_fts, rowid, title, body, path) VALUES ('delete', old.rowid, old.title, old.body, old.path);
   INSERT INTO notes_fts(rowid, title, body, path) VALUES (new.rowid, new.title, new.body, new.path);
 END;
+
+-- Semantic search and memory. `vectors` is keyed by the passage text hash, so
+-- an unchanged passage in a renamed or re-saved note keeps its embedding.
+CREATE TABLE IF NOT EXISTS passages (
+  path TEXT NOT NULL REFERENCES notes(path) ON DELETE CASCADE,
+  ordinal INTEGER NOT NULL,
+  heading TEXT NOT NULL,
+  line INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  PRIMARY KEY (path, ordinal)
+);
+CREATE INDEX IF NOT EXISTS passages_hash ON passages(hash);
+
+CREATE TABLE IF NOT EXISTS vectors (
+  hash TEXT PRIMARY KEY,
+  dim INTEGER NOT NULL,
+  embedding BLOB NOT NULL
+);
+
+-- Memory outlives a deleted note on purpose: no foreign key, and queries join
+-- `notes`, so a note deleted by accident keeps what it learned.
+CREATE TABLE IF NOT EXISTS activation (
+  path TEXT PRIMARY KEY,
+  value REAL NOT NULL,
+  stamped_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS assoc (
+  a_path TEXT NOT NULL,
+  b_path TEXT NOT NULL,
+  value REAL NOT NULL,
+  stamped_at INTEGER NOT NULL,
+  queries TEXT NOT NULL DEFAULT '[]',
+  PRIMARY KEY (a_path, b_path)
+);
+CREATE INDEX IF NOT EXISTS assoc_b ON assoc(b_path);
+
+CREATE TABLE IF NOT EXISTS events (
+  at INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  path TEXT,
+  query TEXT,
+  sitting INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_at ON events(at);

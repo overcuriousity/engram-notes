@@ -195,6 +195,19 @@ fn write_note(
     for b in &note.blocks {
         ins.execute(params![entry.path, b.id, b.line])?;
     }
+    let mut ins = tx.prepare_cached(
+        "INSERT INTO passages(path, ordinal, heading, line, text, hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    )?;
+    for p in crate::search::passages::split(&note.body) {
+        ins.execute(params![
+            entry.path,
+            p.ordinal as i64,
+            p.heading,
+            p.line,
+            p.text,
+            p.hash()
+        ])?;
+    }
     Ok(())
 }
 
@@ -324,5 +337,34 @@ mod tests {
         drop(ix);
         let (_ix, recreated) = Index::open_or_recreate(&p).unwrap();
         assert!(!recreated);
+    }
+
+    #[test]
+    fn rebuild_writes_passages_and_an_edit_replaces_them() {
+        let (d, v) = vault();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        assert_eq!(
+            count(&ix, "SELECT count(*) FROM passages WHERE path='A.md'"),
+            1
+        );
+        let heading: String = ix
+            .conn()
+            .query_row("SELECT heading FROM passages WHERE path='A.md'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(heading, "A");
+        fs::write(d.path().join("A.md"), "# X\none\n\n# Y\ntwo").unwrap();
+        ix.update_file(&v, "A.md").unwrap();
+        let rows: Vec<String> = ix
+            .conn()
+            .prepare("SELECT heading FROM passages WHERE path='A.md' ORDER BY ordinal")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<std::result::Result<_, _>>()
+            .unwrap();
+        assert_eq!(rows, vec!["X".to_string(), "Y".to_string()]);
     }
 }

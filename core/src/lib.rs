@@ -8,6 +8,7 @@ pub mod graph;
 pub mod index;
 pub mod parse;
 pub mod rename;
+pub mod search;
 pub mod vault;
 pub mod watch;
 
