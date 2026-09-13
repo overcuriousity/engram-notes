@@ -79,6 +79,10 @@ impl Index {
         &self.conn
     }
 
+    pub(crate) fn conn_mut(&mut self) -> &mut Connection {
+        &mut self.conn
+    }
+
     fn prepare(&mut self) -> rusqlite::Result<()> {
         self.conn.execute_batch(
             "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA synchronous=NORMAL;",
