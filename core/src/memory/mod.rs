@@ -3,6 +3,7 @@
 
 pub mod decay;
 pub mod prime;
+pub mod related;
 pub mod spread;
 
 use crate::Result;
