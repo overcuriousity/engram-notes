@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTree, dropTarget, freeName, renameTarget } from "./tree";
+import { buildTree, dropTarget, fileTag, freeName, renameTarget } from "./tree";
 
 const f = (path: string) => ({ path, mtime_ms: 0, size: 0, is_markdown: path.endsWith(".md") });
 
@@ -33,5 +33,14 @@ describe("explorer tree", () => {
   it("finds a free Untitled name", () => {
     expect(freeName(["Untitled.md", "d/Untitled.md"], "", "Untitled", ".md")).toBe("Untitled 1.md");
     expect(freeName(["d/Untitled"], "d", "Untitled")).toBe("d/Untitled 1");
+  });
+
+  it("badges a file with its extension, and a note with nothing", () => {
+    expect(fileTag("Kitchen/crumb.png")).toBe("PNG");
+    expect(fileTag("Kitchen/Recipes.base")).toBe("BASE");
+    expect(fileTag("a/b/paper.PDF")).toBe("PDF");
+    expect(fileTag("Index.md")).toBeNull();
+    expect(fileTag("Index.MD")).toBeNull();
+    expect(fileTag("LICENSE")).toBeNull();
   });
 });

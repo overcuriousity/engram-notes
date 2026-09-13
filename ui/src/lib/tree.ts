@@ -62,3 +62,12 @@ export function freeName(taken: string[], dir: string, base: string, ext = ""): 
   for (let i = 1; taken.includes(n); i++) n = join(dir, `${base} ${i}${ext}`);
   return n;
 }
+
+/** Obsidian badges every file that is not markdown with its extension, and shows no icon at all. */
+export function fileTag(path: string): string | null {
+  const name = basename(path);
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return null;
+  const ext = name.slice(dot + 1);
+  return ext.toLowerCase() === "md" ? null : ext.toUpperCase();
+}

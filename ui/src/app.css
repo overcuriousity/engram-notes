@@ -57,9 +57,14 @@ input { font: inherit; color: var(--fg); background: var(--bg); border: 1px soli
 .note.empty { display: grid; place-items: center; color: var(--fg-muted); }
 .statusbar { grid-column: 1 / -1; background: var(--bg-2); border-top: 1px solid var(--border); font-size: var(--font-ui-smaller); color: var(--fg-muted); padding: 0 10px; display: flex; gap: 14px; align-items: center; }
 .pane-title { font-size: var(--font-ui-smaller); text-transform: uppercase; letter-spacing: .04em; color: var(--fg-muted); padding: 8px 12px 3px; }
-.tree button { display: block; width: 100%; text-align: left; font-size: var(--font-ui-small); padding: var(--row-pad); border-radius: var(--radius); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree button { position: relative; display: flex; align-items: center; width: 100%; text-align: left; font-size: var(--font-ui-small); line-height: 1.3; padding: 4px 8px 4px 24px; margin-bottom: 2px; border-radius: 4px; white-space: nowrap; }
 .tree button:hover { background: var(--bg-3); }
 .tree button.active { background: var(--accent-bg); }
+.tree .tname { overflow: hidden; text-overflow: ellipsis; }
+/* The chevron sits in the row's 24px gutter, as Obsidian's absolute one does. */
+.tree .chev { position: absolute; left: var(--chev-left, 4px); display: grid; place-items: center; width: 16px; color: var(--fg-muted); opacity: .6; transition: transform 100ms ease-in-out; }
+.tree .chev.collapsed { transform: rotate(-90deg); }
+.tree .ftag { margin-left: auto; padding: 0 4px; font-size: 9px; font-weight: 600; letter-spacing: .05em; color: var(--fg-muted); opacity: .7; }
 .tabs { display: flex; height: var(--header-height); align-items: center; gap: 2px; padding: 0 8px; overflow-x: auto; background: var(--bg-2); border-bottom: 1px solid var(--border); }
 .tabs button { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-right: none; border-radius: var(--radius); color: var(--fg-muted); white-space: nowrap; font-size: var(--font-ui-small); }
 .tabs button:hover { background: var(--bg-3); }

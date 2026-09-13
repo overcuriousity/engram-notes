@@ -3,7 +3,8 @@
   import { app } from "../lib/state.svelte";
   import { newBase, newNote } from "../lib/commands";
   import { applyRename, createFolder, deleteFile, errorMessage, planRename } from "../lib/api";
-  import { buildTree, dropTarget, freeName, parent, renameTarget, type TreeDir } from "../lib/tree";
+  import { buildTree, dropTarget, fileTag, freeName, parent, renameTarget, type TreeDir } from "../lib/tree";
+  import ChevronDown from "@lucide/svelte/icons/chevron-down";
 
   interface Menu { x: number; y: number; path: string; isDir: boolean }
 
@@ -127,12 +128,12 @@
 {#snippet dir(node: TreeDir, depth: number)}
   {#each node.dirs as d (d.path)}
     {#if editing === d.path}
-      {@render renameBox(d.path, true, d.name, 8 + depth * 12)}
+      {@render renameBox(d.path, true, d.name, 24 + depth * 16)}
     {:else}
       <button
         class="folder"
         class:drop={dropDir === d.path}
-        style="padding-left:{8 + depth * 12}px"
+        style="padding-left:{24 + depth * 16}px;--chev-left:{4 + depth * 16}px"
         draggable="true"
         ondragstart={(e) => start(e, d.path)}
         ondragend={end}
@@ -141,17 +142,18 @@
         onclick={() => (collapsed[d.path] = !collapsed[d.path])}
         oncontextmenu={(e) => openMenu(e, d.path, true)}
       >
-        {collapsed[d.path] ? "▸" : "▾"} {d.name}
+        <span class="chev" class:collapsed={collapsed[d.path]}><ChevronDown size={10} strokeWidth={4} /></span>
+        <span class="tname">{d.name}</span>
       </button>
     {/if}
     {#if !collapsed[d.path]}{@render dir(d, depth + 1)}{/if}
   {/each}
   {#each node.files as f (f.path)}
     {#if editing === f.path}
-      {@render renameBox(f.path, false, f.name, 20 + depth * 12)}
+      {@render renameBox(f.path, false, f.name, 24 + depth * 16)}
     {:else}
       <button
-        style="padding-left:{20 + depth * 12}px"
+        style="padding-left:{24 + depth * 16}px"
         class:active={app.activeTab?.path === f.path}
         draggable="true"
         ondragstart={(e) => start(e, f.path)}
@@ -161,7 +163,8 @@
         onclick={(e) => guarded(() => app.openNote(f.path, undefined, "open", undefined, e.ctrlKey || e.metaKey))}
         oncontextmenu={(e) => openMenu(e, f.path, false)}
       >
-        {f.name}
+        <span class="tname">{f.name}</span>
+        {#if fileTag(f.path)}<span class="ftag">{fileTag(f.path)}</span>{/if}
       </button>
     {/if}
   {/each}
