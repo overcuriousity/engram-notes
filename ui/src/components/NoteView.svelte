@@ -4,7 +4,7 @@
   import { resolveFile } from "../lib/files";
   import { app } from "../lib/state.svelte";
   import { findPane } from "../lib/layout";
-  import { resolveLink, createNote, anchorLine, tags as apiTags, errorMessage } from "../lib/api";
+  import { resolveLink, createNote, anchorLine, tags as apiTags, typing, errorMessage } from "../lib/api";
   import Editor from "./Editor.svelte";
   import Reading from "./Reading.svelte";
 
@@ -30,6 +30,8 @@
   function onChange(text: string) {
     if (text === doc.text) return;
     doc.text = text;
+    // The embed queue steps aside while the user types.
+    void typing().catch(() => {});
     clearTimeout(timer);
     const d = doc;
     timer = setTimeout(() => app.save(d), 500);

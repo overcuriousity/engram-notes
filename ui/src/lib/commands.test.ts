@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allCommands, chord } from "./commands";
+import { allCommands, chord, defaults } from "./commands";
 import { app } from "./state.svelte";
 
 const key = (key: string, mods: Partial<KeyboardEvent> = {}) =>
@@ -30,5 +30,12 @@ describe("commands", () => {
     expect(byId["new-note"]).toBe("Ctrl+Alt+N");
     expect(byId["switcher"]).toBe("Ctrl+O");
     expect(byId["split-right"]).toBe("");
+  });
+
+  it("offers the memory and model commands", () => {
+    const ids = defaults.map((c) => c.id);
+    expect(ids).toContain("memory-toggle");
+    expect(ids).toContain("memory-forget");
+    expect(ids).toContain("model-dir");
   });
 });

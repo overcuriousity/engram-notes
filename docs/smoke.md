@@ -34,4 +34,20 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
 30. Open local graph follows the note last active and its depth slider reaches three links.
 31. Create new base, add a filter in its source, switch back to the table: rows match, a header click sorts and writes `sort`, a cell edit rewrites the note's frontmatter.
 32. A base using `file.ctime` lists it as unsupported and shows no rows.
-33. `cargo test --workspace` and `pnpm check && pnpm test` pass.
+33. On first open the status bar says *downloading model*, then counts passages
+    pending down to nothing; full-text search answers throughout.
+34. Search a phrase no note contains word for word: semantic hits appear, the
+    divider is drawn above the loose ones and they are smaller.
+35. Open two notes from the same search, search again a minute later: the pair
+    shows under *Associated* with the query as its cue.
+36. Open one note ten times, search for something it matches weakly: it carries
+    the *primed* badge and has climbed at most two places.
+37. The Related pane lists associated, similar and suggested links; *link*
+    inserts `[[Title]]` at the cursor.
+38. Turn memory off in the status bar: *Associated* and the badges go, *Similar*
+    stays. *Memory: forget everything learned* empties it and the pane with it.
+39. Turn on semantic edges in the local graph: dashed edges appear, thicker
+    where the association is stronger, and the global graph still has none.
+40. *Embedding: choose the model folder* on a folder with the ONNX file and
+    tokenizer loads it with no network, and the vectors are rebuilt.
+41. `cargo test --workspace` and `pnpm check && pnpm test` pass.

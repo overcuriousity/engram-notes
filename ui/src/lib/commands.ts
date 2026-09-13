@@ -1,5 +1,6 @@
 import { app } from "./state.svelte";
-import { dailyNote, createNote } from "./api";
+import { open } from "@tauri-apps/plugin-dialog";
+import { dailyNote, createNote, forgetMemory, setConfig, setModelDir } from "./api";
 import { freeName } from "./tree";
 
 export interface Command { id: string; name: string; hotkey: string; run: () => void | Promise<void> }
@@ -38,6 +39,38 @@ export const defaults: Command[] = [
   { id: "toggle-left", name: "Toggle left sidebar", hotkey: "Ctrl+Shift+L", run: () => (app.showLeft = !app.showLeft) },
   { id: "toggle-right", name: "Toggle right sidebar", hotkey: "Ctrl+Shift+R", run: () => (app.showRight = !app.showRight) },
   { id: "save", name: "Save", hotkey: "Ctrl+S", run: () => { const d = app.activeDoc; if (d) return app.save(d); } },
+  {
+    id: "memory-toggle",
+    name: "Memory: turn on or off",
+    hotkey: "",
+    run: async () => {
+      const cfg = app.config;
+      if (!cfg) return;
+      cfg.memory.enabled = !cfg.memory.enabled;
+      await setConfig($state.snapshot(cfg));
+      app.say(cfg.memory.enabled ? "Memory is on." : "Memory is off; what it learned is kept.");
+    },
+  },
+  {
+    id: "memory-forget",
+    name: "Memory: forget everything learned",
+    hotkey: "",
+    run: async () => {
+      await forgetMemory();
+      app.say("Memory forgotten.");
+    },
+  },
+  {
+    id: "model-dir",
+    name: "Embedding: choose the model folder",
+    hotkey: "",
+    run: async () => {
+      const dir = await open({ directory: true });
+      if (typeof dir !== "string") return;
+      await setModelDir(dir);
+      app.say("Loading the model from that folder.");
+    },
+  },
 ];
 
 export function allCommands(): Command[] {
