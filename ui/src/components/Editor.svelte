@@ -169,13 +169,14 @@
     onJumped();
   });
 
-  // The Related pane's *link* action, applied where the cursor is.
+  // The Related pane's *link* and a template, put where the cursor is; a
+  // selection is replaced, as Obsidian's insert does.
   $effect(() => {
     const req = insert;
     const v = view;
     if (!req || !v) return;
-    const at = v.state.selection.main.head;
-    v.dispatch({ changes: { from: at, insert: req.text }, selection: { anchor: at + req.text.length } });
+    const { from, to } = v.state.selection.main;
+    v.dispatch({ changes: { from, to, insert: req.text }, selection: { anchor: from + req.text.length } });
     v.focus();
     onInserted();
   });

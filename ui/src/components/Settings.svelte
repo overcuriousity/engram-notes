@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from "../lib/state.svelte";
-  import { errorMessage, forgetMemory, setConfig, setModelDir } from "../lib/api";
+  import { errorMessage, forgetMemory, openExternal, setConfig, setModelDir } from "../lib/api";
+  import { toggleSnippet } from "../lib/snippets";
   import { open } from "@tauri-apps/plugin-dialog";
 
   const cfg = $derived(app.config);
@@ -21,6 +22,12 @@
     if (!cfg) return;
     const n = cfg.editor.indent;
     cfg.editor.indent = Number.isFinite(n) ? Math.min(8, Math.max(1, Math.round(n))) : 2;
+    return save();
+  }
+
+  function setSnippet(name: string, on: boolean) {
+    if (!cfg) return;
+    cfg.css_snippets = toggleSnippet(cfg.css_snippets, name, on);
     return save();
   }
 
@@ -45,6 +52,20 @@
           <option value="dark">Dark</option>
         </select>
       </label>
+      <div class="hint">
+        <span>CSS snippets in <code>.engram-notes/snippets</code></span>
+        <span>
+          <button class="pick" onclick={() => app.loadSnippets()}>Reload</button>
+          <button class="pick" onclick={() => openExternal(".engram-notes/snippets").catch((e) => app.say(errorMessage(e)))}>Open folder</button>
+        </span>
+      </div>
+      {#each app.snippets as s (s.name)}
+        <label>{s.name}
+          <input type="checkbox" checked={cfg.css_snippets.includes(s.name)} onchange={(e) => setSnippet(s.name, e.currentTarget.checked)} />
+        </label>
+      {:else}
+        <div class="hint muted">No snippets yet. Drop a <code>.css</code> file in the folder and reload.</div>
+      {/each}
 
       <div class="pane-title">Editor</div>
       <label>Default mode
@@ -61,6 +82,13 @@
       <div class="pane-title">Daily notes</div>
       <label>Folder <input bind:value={cfg.daily_notes.folder} onchange={save} /></label>
       <label>Date format <input bind:value={cfg.daily_notes.format} onchange={save} /></label>
+      <label>Template <input bind:value={cfg.daily_notes.template} placeholder="Templates/Daily.md" onchange={() => { if (cfg.daily_notes.template === "") cfg.daily_notes.template = null; return save(); }} /></label>
+
+      <div class="pane-title">Templates</div>
+      <label>Folder <input bind:value={cfg.templates.folder} onchange={save} /></label>
+      <label>Date format <input bind:value={cfg.templates.date_format} onchange={save} /></label>
+      <label>Time format <input bind:value={cfg.templates.time_format} onchange={save} /></label>
+      <div class="hint muted">Filled into <code>{"{{date}}"}</code>, <code>{"{{time}}"}</code> and <code>{"{{title}}"}</code>; <code>{"{{date:YYYY-MM-DD}}"}</code> picks its own.</div>
 
       <div class="pane-title">Search and memory</div>
       <label>Memory <input type="checkbox" bind:checked={cfg.memory.enabled} onchange={save} /></label>

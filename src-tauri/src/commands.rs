@@ -2,13 +2,14 @@ use crate::embed::EmbedStatus;
 use crate::error::{CmdResult, CommandError};
 use crate::state::{AppState, Open};
 use engram_core::bases::{SortKey, Table};
-use engram_core::config::{self, AppConfig};
+use engram_core::config::{self, AppConfig, Snippet};
 use engram_core::graph::{Graph, SemanticEdge};
 use engram_core::index::query::{LinkRow, PropertyCount, TagCount, Unresolved};
 use engram_core::index::{Index, RebuildStats};
 use engram_core::memory::{EventKind, related::Related};
 use engram_core::rename::RenamePlan;
 use engram_core::search::SearchResults;
+use engram_core::templates;
 use engram_core::vault::{FileEntry, Vault};
 use engram_core::watch::{Change, ChangeKind};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -531,17 +532,49 @@ pub fn set_folds(state: State<AppState>, path: String, keys: Vec<String>) -> Cmd
 #[tauri::command]
 pub fn daily_note(state: State<AppState>) -> CmdResult<String> {
     with_open(&state, |o| {
-        let path = config::daily_note_path(&o.config, chrono::Local::now().date_naive());
+        let now = chrono::Local::now().naive_local();
+        let path = config::daily_note_path(&o.config, now.date());
         if o.vault.stat(&path)?.is_none() {
-            let template = match &o.config.daily_notes.template {
-                Some(t) => o.vault.read(t).unwrap_or_default(),
+            let text = match &o.config.daily_notes.template {
+                Some(t) => templates::render(&o.vault, &o.config, t, now, title_of(&path))
+                    .unwrap_or_default(),
                 None => String::new(),
             };
-            o.vault.create(&path, &template)?;
+            o.vault.create(&path, &text)?;
             o.index.update_file(&o.vault, &path)?;
         }
         Ok(path)
     })
+}
+
+fn title_of(path: &str) -> &str {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    name.strip_suffix(".md").unwrap_or(name)
+}
+
+#[tauri::command]
+pub fn templates(state: State<AppState>) -> CmdResult<Vec<String>> {
+    with_open(&state, |o| Ok(templates::list(&o.vault, &o.config)?))
+}
+
+/// The template at `path` filled in for the note at `into`, as of now.
+#[tauri::command]
+pub fn render_template(state: State<AppState>, path: String, into: String) -> CmdResult<String> {
+    with_open(&state, |o| {
+        let now = chrono::Local::now().naive_local();
+        Ok(templates::render(
+            &o.vault,
+            &o.config,
+            &path,
+            now,
+            title_of(&into),
+        )?)
+    })
+}
+
+#[tauri::command]
+pub fn snippets(state: State<AppState>) -> CmdResult<Vec<Snippet>> {
+    with_open(&state, |o| Ok(config::snippets(&o.vault)?))
 }
 
 #[cfg(test)]
@@ -566,12 +599,29 @@ mod tests {
         assert_eq!(v["root"], "/v");
         assert_eq!(v["config"]["editor"]["default_mode"], "live");
         assert_eq!(v["config"]["daily_notes"]["template"], json!(null));
+        assert_eq!(v["config"]["templates"]["folder"], "Templates");
+        assert_eq!(v["config"]["css_snippets"], json!([]));
         assert_eq!(
             v["stats"],
             json!({"added": 1, "updated": 0, "removed": 0, "unchanged": 0})
         );
         assert_eq!(v["index_recreated"], true);
         assert_eq!(v["watch_error"], json!(null));
+    }
+
+    #[test]
+    fn snippets_and_the_title_a_template_sees() {
+        let s = Snippet {
+            name: "wide".into(),
+            css: "b {}".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&s).unwrap(),
+            json!({"name": "wide", "css": "b {}"})
+        );
+        assert_eq!(title_of("Daily/2026-09-14.md"), "2026-09-14");
+        assert_eq!(title_of("Note.md"), "Note");
+        assert_eq!(title_of(""), "");
     }
 
     #[test]

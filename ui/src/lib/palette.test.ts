@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createName, matchCommands, matchNotes } from "./palette";
+import { createName, matchCommands, matchNotes, matchTemplates, templateName } from "./palette";
 import type { Command } from "./commands";
 
 const titles: [string, string][] = [
@@ -35,5 +35,21 @@ describe("matchCommands", () => {
     ];
     expect(matchCommands(cmds, "SPLIT").map((c) => c.id)).toEqual(["a"]);
     expect(matchCommands(cmds, "")).toHaveLength(2);
+  });
+});
+
+describe("templates", () => {
+  const paths = ["Templates/Meeting.md", "Templates/people/Person.md", "Loose.md"];
+
+  it("names a template by its path inside the folder", () => {
+    expect(templateName("Templates/Meeting.md", "Templates")).toBe("Meeting");
+    expect(templateName("Templates/people/Person.md", "/Templates/")).toBe("people/Person");
+    expect(templateName("Loose.md", "Templates")).toBe("Loose");
+    expect(templateName("Meeting.md", "")).toBe("Meeting");
+  });
+
+  it("matches on the name and lists everything for an empty query", () => {
+    expect(matchTemplates(paths, "Templates", "").map((m) => m.title)).toEqual(["Meeting", "people/Person", "Loose"]);
+    expect(matchTemplates(paths, "Templates", "person")).toEqual([{ path: "Templates/people/Person.md", title: "people/Person" }]);
   });
 });

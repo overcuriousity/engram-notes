@@ -1,7 +1,8 @@
 import { app } from "./state.svelte";
 import { open } from "@tauri-apps/plugin-dialog";
-import { dailyNote, createNote, forgetMemory, setConfig, setModelDir } from "./api";
+import { dailyNote, createNote, forgetMemory, setConfig, setModelDir, templates } from "./api";
 import { freeName } from "./tree";
+import { fileKind } from "./files";
 
 export interface Command { id: string; name: string; hotkey: string; run: () => void | Promise<void> }
 
@@ -22,6 +23,20 @@ export async function newBase(dir = "") {
   await app.openNote(n);
 }
 
+/** The note a template can go into: the active tab, when it is a note in an editing mode. */
+export function templateTarget(): string | null {
+  const t = app.activeTab;
+  return t && fileKind(t.path) === "note" && t.mode !== "reading" ? t.path : null;
+}
+
+// Obsidian's picker over the templates folder; the folder is read afresh each time.
+export async function insertTemplate() {
+  if (!templateTarget()) return app.say("Open a note in an editing mode to insert a template.");
+  app.templates = await templates();
+  if (!app.templates.length) return app.say(`No templates in ${app.config?.templates.folder ?? "the templates folder"}.`);
+  app.palette = "templates";
+}
+
 export const defaults: Command[] = [
   { id: "palette", name: "Open command palette", hotkey: "Ctrl+P", run: () => (app.palette = "commands") },
   { id: "switcher", name: "Quick switcher", hotkey: "Ctrl+O", run: () => (app.palette = "files") },
@@ -31,6 +46,7 @@ export const defaults: Command[] = [
   { id: "graph", name: "Open graph view", hotkey: "Ctrl+G", run: () => app.openNote("graph:global") },
   { id: "local-graph", name: "Open local graph", hotkey: "", run: () => app.openNote("graph:local") },
   { id: "daily", name: "Open today's daily note", hotkey: "Ctrl+D", run: async () => { const p = await dailyNote(); await app.refresh(); await app.openNote(p); } },
+  { id: "insert-template", name: "Templates: Insert template", hotkey: "", run: () => insertTemplate() },
   { id: "close-tab", name: "Close current tab", hotkey: "Ctrl+W", run: () => { const p = app.pane; if (p.active >= 0) app.closeTab(p.id, p.active); } },
   { id: "toggle-mode", name: "Toggle live preview / source", hotkey: "Ctrl+E", run: () => { const t = app.activeTab; if (t) app.setMode(app.pane.id, t.path, t.mode === "source" ? "live" : "source"); } },
   { id: "toggle-reading", name: "Toggle reading view", hotkey: "Ctrl+Shift+E", run: () => { const t = app.activeTab; if (t) app.setMode(app.pane.id, t.path, t.mode === "reading" ? "live" : "reading"); } },

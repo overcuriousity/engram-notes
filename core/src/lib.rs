@@ -11,6 +11,7 @@ pub mod memory;
 pub mod parse;
 pub mod rename;
 pub mod search;
+pub mod templates;
 pub mod vault;
 pub mod watch;
 

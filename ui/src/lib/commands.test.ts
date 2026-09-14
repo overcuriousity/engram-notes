@@ -16,8 +16,10 @@ describe("commands", () => {
     app.config = {
       editor: { default_mode: "live", indent: 2 },
       daily_notes: { folder: "Daily", template: null, format: "%Y-%m-%d" },
+      templates: { folder: "Templates", date_format: "YYYY-MM-DD", time_format: "HH:mm" },
       hotkeys: { "new-note": "Ctrl+Alt+N" },
       theme: "system",
+      css_snippets: [],
       search: { candidate_multiplier: 3, rrf_k: 60, cliff_factor: 3, cliff_min_share: 0.01, similarity_floor: 0.83 },
       memory: {
         enabled: true, activation_half_life_days: 30, assoc_half_life_days: 90,
@@ -37,5 +39,6 @@ describe("commands", () => {
     expect(ids).toContain("memory-toggle");
     expect(ids).toContain("memory-forget");
     expect(ids).toContain("model-dir");
+    expect(ids).toContain("insert-template");
   });
 });
