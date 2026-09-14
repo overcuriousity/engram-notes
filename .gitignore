@@ -12,3 +12,4 @@ node_modules/
 # The agent's own workspace: worktrees, ledgers, session notes. Never the record.
 /.claude/
 /.superpowers/
+/dist

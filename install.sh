@@ -1,6 +1,8 @@
 #!/bin/sh
 # Installs the latest engram-notes build from GitHub releases.
 #   curl -fsSL https://raw.githubusercontent.com/overcuriousity/engram-notes/master/install.sh | sh
+# ENGRAM_NOTES_SLIM=1 takes the bare binary instead of the AppImage, for a
+# machine that already has webkit2gtk 4.1 and GTK 3.
 set -eu
 
 repo=${ENGRAM_NOTES_REPO:-overcuriousity/engram-notes}
@@ -16,11 +18,15 @@ case "$(uname -s)" in
 esac
 
 case "$(uname -m)" in
-  x86_64 | amd64) triple=x86_64-unknown-linux-gnu ;;
+  x86_64 | amd64) ;;
   *) die "only x86_64 Linux is published so far (this is $(uname -m))" ;;
 esac
 
-name=engram-notes-$triple
+if [ "${ENGRAM_NOTES_SLIM:-0}" = 1 ]; then
+  asset=engram-notes-x86_64-unknown-linux-gnu.tar.gz
+else
+  asset=engram-notes-x86_64.AppImage
+fi
 base=https://github.com/$repo/releases/download/$tag
 
 command -v curl >/dev/null 2>&1 || die "curl is required"
@@ -46,17 +52,20 @@ fetch() {
   fi
 }
 
-printf 'engram-notes: downloading %s from %s\n' "$name" "$tag"
-fetch "$name.tar.gz"
-fetch "$name.tar.gz.sha256"
+printf 'engram-notes: downloading %s from %s\n' "$asset" "$tag"
+fetch "$asset"
+fetch "$asset.sha256"
 
-(cd "$tmp" && $checksum < "$name.tar.gz.sha256" >/dev/null) ||
+(cd "$tmp" && $checksum < "$asset.sha256" >/dev/null) ||
   die "checksum mismatch — refusing to install"
 
-tar -xzf "$tmp/$name.tar.gz" -C "$tmp"
-mkdir -p "$bin_dir"
-install -m 755 "$tmp/engram-notes" "$bin_dir/engram-notes"
+case "$asset" in
+  *.tar.gz) tar -xzf "$tmp/$asset" -C "$tmp"; built=$tmp/engram-notes ;;
+  *) built=$tmp/$asset ;;
+esac
 
+mkdir -p "$bin_dir"
+install -m 755 "$built" "$bin_dir/engram-notes"
 printf 'engram-notes: installed to %s/engram-notes\n' "$bin_dir"
 
 case ":$PATH:" in
@@ -64,9 +73,17 @@ case ":$PATH:" in
   *) printf 'engram-notes: %s is not on your PATH; add it to your shell profile\n' "$bin_dir" ;;
 esac
 
-if ldd "$bin_dir/engram-notes" 2>/dev/null | grep -q 'not found'; then
-  printf 'engram-notes: shared libraries are missing; install webkit2gtk 4.1 and GTK 3\n'
-fi
+case "$asset" in
+  *.tar.gz)
+    if ldd "$bin_dir/engram-notes" 2>/dev/null | grep -q 'not found'; then
+      printf 'engram-notes: shared libraries are missing; install webkit2gtk 4.1 and GTK 3, or rerun without ENGRAM_NOTES_SLIM\n'
+    fi ;;
+  *)
+    # An AppImage mounts itself through FUSE 2; without it, it can still unpack.
+    if ! ldconfig -p 2>/dev/null | grep -q libfuse.so.2; then
+      printf 'engram-notes: libfuse2 is missing; install it, or run `engram-notes --appimage-extract-and-run <vault>`\n'
+    fi ;;
+esac
 
 printf 'engram-notes: run it with `engram-notes <vault>`\n'
 exit 0

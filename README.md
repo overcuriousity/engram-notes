@@ -18,11 +18,14 @@ Linux, x86_64:
 
     curl -fsSL https://raw.githubusercontent.com/overcuriousity/engram-notes/master/install.sh | sh
 
-That fetches the `latest` release — the binary built from the newest commit on
-`master` — verifies its checksum and installs it to `~/.local/bin`. Set
-`ENGRAM_NOTES_BIN_DIR` to install elsewhere. It needs webkit2gtk 4.1 and GTK 3
-at runtime: `webkit2gtk4.1 gtk3` on Fedora, `libwebkit2gtk-4.1-0 libgtk-3-0` on
-Debian and Ubuntu.
+That fetches the `latest` build — from the newest commit on `master` — verifies
+its checksum and installs it to `~/.local/bin` (`ENGRAM_NOTES_BIN_DIR` moves it).
+
+It installs the AppImage, which carries WebKitGTK with it and needs nothing but
+glibc 2.39 or newer and libfuse2. A Tauri application never bundles the webview
+into a bare executable: on Linux the webview *is* the system's WebKitGTK. If
+this machine already has webkit2gtk 4.1 and GTK 3, `ENGRAM_NOTES_SLIM=1` takes
+the 18 MB binary instead of the 100 MB AppImage.
 
     engram-notes ~/my-vault
 
