@@ -22,7 +22,7 @@ That fetches the `latest` build — from the newest commit on `master` — verif
 its checksum and installs it to `~/.local/bin` (`ENGRAM_NOTES_BIN_DIR` moves it).
 
 It installs the AppImage, which carries WebKitGTK with it and needs nothing but
-glibc 2.39 or newer and libfuse2. A Tauri application never bundles the webview
+glibc 2.39 or newer, libfuse2 and the host's own Wayland and Mesa libraries. A Tauri application never bundles the webview
 into a bare executable: on Linux the webview *is* the system's WebKitGTK. If
 this machine already has webkit2gtk 4.1 and GTK 3, `ENGRAM_NOTES_SLIM=1` takes
 the 18 MB binary instead of the 100 MB AppImage.

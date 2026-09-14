@@ -43,10 +43,26 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: 1
       # The AppImage carries WebKitGTK; the tarball is the slim build for
       # machines that already have it.
+      #
+      # Tauri's GTK plugin bundles libwayland, which the AppImage excludelist
+      # forbids: the host's Mesa already links the host's copy, and a second
+      # one in the process makes eglGetDisplay fail with EGL_BAD_PARAMETER on
+      # any Wayland session. Unpack, drop them, repack.
       - name: Package
         run: |
           mkdir -p dist
-          cp target/release/bundle/appimage/*.AppImage dist/engram-notes-x86_64.AppImage
+          cd target/release/bundle/appimage
+          for f in *.AppImage; do APPIMAGE_EXTRACT_AND_RUN=1 "./$f" --appimage-extract >/dev/null; done
+          rm -f squashfs-root/usr/lib/libwayland-client.so.0 \
+                squashfs-root/usr/lib/libwayland-egl.so.1 \
+                squashfs-root/usr/lib/libwayland-cursor.so.0 \
+                squashfs-root/usr/lib/libwayland-server.so.0
+          curl -fsSL -o "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          APPIMAGE_EXTRACT_AND_RUN=1 "$RUNNER_TEMP/appimagetool" squashfs-root \
+            "$GITHUB_WORKSPACE/dist/engram-notes-x86_64.AppImage"
+          cd "$GITHUB_WORKSPACE"
           tar -czf dist/engram-notes-x86_64-unknown-linux-gnu.tar.gz -C target/release engram-notes
       - uses: actions/upload-artifact@v4
         with:
