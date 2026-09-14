@@ -85,13 +85,25 @@ smoke lines 55–58 in the real window.
   `css_snippets` in `app.json`; `body.theme-dark` / `.theme-light` say what is
   on screen.
 
-## 0.4 — The Logseq importer ⬜
+## 0.4 — The Logseq importer 🔶
 
 The door the named population walks through. One command, the original
 untouched, a report of everything that could not be mapped. Journals to daily
 notes, namespaces to folders, `key:: value` to frontmatter, `id::` to `^id`
 anchors, `((uuid))` to `[[Page#^id]]`, `collapsed::` dropped, task markers to
-checkboxes, `#[[multi word]]` to a link.
+checkboxes, `#[[multi word]]` to a link. In review; what remains is smoke
+lines 63–67 in the real window.
+
+- 🔶 *Import: Logseq graph* picks the graph and a folder in the vault; the
+  graph is only read; `import-report.md` names every file and line that was
+  kept as text or left out; nothing already in the vault is overwritten.
+- 🔶 Journals to the daily folder, `a___b.md` to `a/b.md`, page properties
+  to frontmatter, `id::` to `^anchor` and `((uuid))` to `[[Page#^anchor]]`,
+  `{{embed}}` to `![[…]]`, `collapsed::` dropped, task markers to
+  checkboxes, `#[[multi word]]` to a link, tabs to `editor.indent`,
+  `assets/` copied beside the notes (`docs/import.md`).
+- 🔶 Idempotent: the output imports to itself, and a second run over the
+  vault writes nothing.
 
 ## 0.5 — Linking ⬜
 
