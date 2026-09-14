@@ -76,3 +76,5 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
     and it stays folded.
 53. With the `[[` popup open, Tab accepts the completion; Tab in prose inserts
     the indent width from settings.
+54. Delete a note that had folded items and create a new one at the same path:
+    it opens with nothing folded.
