@@ -4,12 +4,14 @@
   import { EditorView, keymap, drawSelection, highlightActiveLine } from "@codemirror/view";
   import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
   import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+  import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
   import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
   import { yamlFrontmatter } from "@codemirror/lang-yaml";
   import { languages } from "@codemirror/language-data";
   import { editorTheme, markdownHighlight } from "../editor/theme";
   import { livePreview } from "../editor/livePreview";
   import { completions } from "../editor/completions";
+  import { markdownBrackets } from "../editor/outline";
   import { textDiff } from "../lib/textdiff";
 
   interface Props {
@@ -44,6 +46,8 @@
           drawSelection(),
           highlightActiveLine(),
           highlightSelectionMatches(),
+          closeBrackets(),
+          markdownBrackets,
           // GFM for tasks and strikethrough; YAML so frontmatter is not read as a heading.
           yamlFrontmatter({ content: markdown({ base: markdownLanguage, codeLanguages: languages }) }),
           editorTheme,
@@ -51,7 +55,7 @@
           EditorView.lineWrapping,
           modeComp.of(forMode(mode)),
           completions(titles, tags),
-          keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+          keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onchange(u.state.doc.toString());
           }),
