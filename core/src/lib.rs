@@ -6,6 +6,7 @@ pub mod embed;
 pub mod error;
 pub mod frontmatter;
 pub mod graph;
+pub mod import;
 pub mod index;
 pub mod memory;
 pub mod parse;
