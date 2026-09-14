@@ -24,6 +24,8 @@ pub struct SourceFile {
 pub struct Mapped {
     /// Relative to the vault root.
     pub path: String,
+    /// The graph file it came from, relative to the graph root.
+    pub source: String,
     pub text: String,
     pub journal: bool,
 }
@@ -72,9 +74,19 @@ fn usable_name(title: &str) -> bool {
         })
 }
 
+/// Logseq writes `.md`, but a graph carried through other tools can hold `.MD`.
+fn strip_md(name: &str) -> Option<&str> {
+    let cut = name.len().checked_sub(3)?;
+    if name.get(cut..)?.eq_ignore_ascii_case(".md") {
+        Some(&name[..cut])
+    } else {
+        None
+    }
+}
+
 /// Logseq's file name for a page: `a___b.md` (or the older `a%2Fb.md`) is `a/b`.
 fn page_name(rel: &str) -> String {
-    let stem = rel.strip_suffix(".md").unwrap_or(rel);
+    let stem = strip_md(rel).unwrap_or(rel);
     stem.replace("___", "/").replace("%2F", "/")
 }
 
@@ -82,7 +94,7 @@ fn plan<'a>(f: &'a SourceFile, opts: &Options, report: &mut Report) -> Planned<'
     let mut page = page::parse(&f.text, opts.config.editor.indent);
     let mut properties = std::mem::take(&mut page.properties);
     if let Some(name) = f.path.strip_prefix("journals/") {
-        let stem = name.strip_suffix(".md").unwrap_or(name);
+        let stem = strip_md(name).unwrap_or(name);
         let path = match chrono::NaiveDate::parse_from_str(stem, "%Y_%m_%d") {
             Ok(date) => config::daily_note_path(opts.config, date),
             Err(_) => {
@@ -134,7 +146,8 @@ fn anchor_for(uuid: &str, used: &mut HashSet<String>) -> String {
         .collect::<String>()
         .to_lowercase();
     for len in [8, 12, 16, 32] {
-        let a = flat[..len.min(flat.len())].to_owned();
+        // An `id::` value is not always a uuid, so count characters.
+        let a: String = flat.chars().take(len).collect();
         if used.insert(a.clone()) {
             return a;
         }
@@ -143,15 +156,13 @@ fn anchor_for(uuid: &str, used: &mut HashSet<String>) -> String {
 }
 
 fn stem(path: &str) -> &str {
-    path.rsplit('/')
-        .next()
-        .unwrap_or(path)
-        .trim_end_matches(".md")
+    let name = path.rsplit('/').next().unwrap_or(path);
+    strip_md(name).unwrap_or(name)
 }
 
 /// Collects `id::` blocks into the table and stamps their anchors onto the
 /// blocks, so the second pass can render `^anchor` and rewrite `((uuid))`.
-fn collect_ids(planned: &mut [Planned], refs: &mut Refs) {
+fn collect_ids(planned: &mut [Planned], refs: &mut Refs, report: &mut Report) {
     let mut stems: HashMap<String, usize> = HashMap::new();
     for p in planned.iter() {
         *stems.entry(stem(&p.path).to_lowercase()).or_default() += 1;
@@ -161,7 +172,7 @@ fn collect_ids(planned: &mut [Planned], refs: &mut Refs) {
         // Obsidian resolves a bare name to the shortest path; a shared name
         // needs the full one.
         let link = if stems[&stem.to_lowercase()] > 1 {
-            p.path.trim_end_matches(".md").to_owned()
+            strip_md(&p.path).unwrap_or(&p.path).to_owned()
         } else {
             stem.to_owned()
         };
@@ -172,12 +183,18 @@ fn collect_ids(planned: &mut [Planned], refs: &mut Refs) {
                 _ => None,
             });
             let Some(uuid) = id else { continue };
-            let anchor = anchor_for(&uuid, &mut used);
-            refs.insert(uuid.to_lowercase(), (link.clone(), anchor.clone()));
             if b.head.trim_start().starts_with("```") {
-                // After a fence opener the anchor would be part of the info string.
+                // After a fence opener the anchor would be part of the info
+                // string, so there is nothing for a reference to point at.
+                report.note(
+                    &p.src.path,
+                    b.line,
+                    "`id::` on a code block cannot become an anchor, references to it are kept as text",
+                );
                 continue;
             }
+            let anchor = anchor_for(&uuid, &mut used);
+            refs.insert(uuid.to_lowercase(), (link.clone(), anchor.clone()));
             b.head = format!("{} ^{anchor}", b.head).trim_start().to_owned();
         }
     }
@@ -214,7 +231,7 @@ fn yaml_value(key: &str, value: &str) -> serde_json::Value {
     Value::String(value.to_owned())
 }
 
-fn frontmatter(properties: &[(String, String)]) -> String {
+fn frontmatter(properties: &[(String, String)], file: &str, report: &mut Report) -> String {
     if properties.is_empty() {
         return String::new();
     }
@@ -223,8 +240,17 @@ fn frontmatter(properties: &[(String, String)]) -> String {
         let key = if k == "alias" { "aliases" } else { k.as_str() };
         map.insert(key.to_owned(), yaml_value(k, v));
     }
-    let yaml = serde_yaml_ng::to_string(&map).unwrap_or_default();
-    format!("---\n{yaml}---\n")
+    match serde_yaml_ng::to_string(&map) {
+        Ok(yaml) => format!("---\n{yaml}---\n"),
+        Err(e) => {
+            report.note(
+                file,
+                0,
+                format!("page properties are not valid YAML ({e}), left out"),
+            );
+            String::new()
+        }
+    }
 }
 
 fn render(p: &Planned, refs: &Refs, indent: usize, report: &mut Report) -> String {
@@ -265,7 +291,7 @@ fn render(p: &Planned, refs: &Refs, indent: usize, report: &mut Report) -> Strin
             }
         }
     }
-    page::render(&page, &frontmatter(&p.properties), indent)
+    page::render(&page, &frontmatter(&p.properties, file, report), indent)
 }
 
 pub fn map_graph(files: &[SourceFile], opts: &Options) -> Output {
@@ -276,19 +302,40 @@ pub fn map_graph(files: &[SourceFile], opts: &Options) -> Output {
         if IGNORED.contains(&top) || top == "assets" {
             continue;
         }
-        if !f.path.to_lowercase().ends_with(".md") {
+        if strip_md(&f.path).is_none() {
             out.report.note(&f.path, 0, "not imported");
             continue;
         }
         planned.push(plan(f, opts, &mut out.report));
     }
+    // Two pages can want one file: a `title::` onto another page's name, or
+    // journals whose daily format has no day in it. The first one keeps it.
+    let mut taken: HashMap<String, String> = HashMap::new();
+    planned.retain(|p| match taken.get(&p.path.to_lowercase()) {
+        Some(first) => {
+            out.report.note(
+                &p.src.path,
+                0,
+                format!(
+                    "maps to `{}`, which `{first}` already uses, not imported",
+                    p.path
+                ),
+            );
+            false
+        }
+        None => {
+            taken.insert(p.path.to_lowercase(), p.src.path.clone());
+            true
+        }
+    });
     let mut refs = Refs::new();
-    collect_ids(&mut planned, &mut refs);
+    collect_ids(&mut planned, &mut refs, &mut out.report);
     let indent = opts.config.editor.indent;
     for p in &planned {
         let text = render(p, &refs, indent, &mut out.report);
         out.pages.push(Mapped {
             path: p.path.clone(),
+            source: p.src.path.clone(),
             text,
             journal: p.journal,
         });
@@ -319,6 +366,7 @@ pub fn run(vault: &Vault, cfg: &AppConfig, graph: &Path, dest: &str) -> Result<S
     }
     let mut files = Vec::new();
     let mut assets = Vec::new();
+    let mut unreadable = Vec::new();
     let walker = walkdir::WalkDir::new(graph).into_iter().filter_entry(|e| {
         let name = e.file_name().to_string_lossy();
         e.depth() == 0
@@ -338,17 +386,30 @@ pub fn run(vault: &Vault, cfg: &AppConfig, graph: &Path, dest: &str) -> Result<S
         if rel.starts_with("assets/") {
             assets.push((entry.path().to_path_buf(), rel));
         } else {
-            // A file that is not text is not a note; it is reported as not imported.
-            let text = std::fs::read_to_string(entry.path()).unwrap_or_default();
-            files.push(SourceFile { path: rel, text });
+            // A file that is not text is not a note.
+            match std::fs::read_to_string(entry.path()) {
+                Ok(text) => files.push(SourceFile { path: rel, text }),
+                Err(e) => unreadable.push((rel, e.to_string())),
+            }
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     let mut out = map_graph(&files, &Options { dest, config: cfg });
+    for (rel, why) in &unreadable {
+        out.report.note(
+            rel,
+            0,
+            format!("could not be read as text ({why}), not imported"),
+        );
+    }
     let mut s = Summary {
         report: join(dest, "import-report.md"),
+        // What the mapping could not map; writing counts its own skips.
+        unmapped: out.report.entries.len(),
         ..Default::default()
     };
+    // A write that fails still owes the user a report of what landed.
+    let mut failed = None;
     for m in &out.pages {
         match vault.create(&m.path, &m.text) {
             Ok(()) if m.journal => s.journals += 1,
@@ -356,12 +417,23 @@ pub fn run(vault: &Vault, cfg: &AppConfig, graph: &Path, dest: &str) -> Result<S
             Err(Error::Exists(_)) => {
                 s.skipped += 1;
                 out.report
-                    .note(&m.path, 0, "already in the vault, not written");
+                    .note(&m.source, 0, "already in the vault, not written");
             }
-            Err(e) => return Err(e),
+            Err(e) => {
+                out.report.note(
+                    &m.source,
+                    0,
+                    format!("could not be written ({e}), the import stopped here"),
+                );
+                failed = Some(e);
+                break;
+            }
         }
     }
     for (src, rel) in assets {
+        if failed.is_some() {
+            break;
+        }
         let dst = vault.abs(&join(dest, &rel));
         if dst.exists() {
             s.skipped += 1;
@@ -369,24 +441,47 @@ pub fn run(vault: &Vault, cfg: &AppConfig, graph: &Path, dest: &str) -> Result<S
                 .note(&rel, 0, "already in the vault, not written");
             continue;
         }
-        if let Some(dir) = dst.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| Error::io(dir, e))?;
+        let copy = || -> Result<()> {
+            if let Some(dir) = dst.parent() {
+                std::fs::create_dir_all(dir).map_err(|e| Error::io(dir, e))?;
+            }
+            std::fs::copy(&src, &dst).map_err(|e| Error::io(&dst, e))?;
+            Ok(())
+        };
+        match copy() {
+            Ok(()) => s.assets += 1,
+            Err(e) => {
+                out.report.note(
+                    &rel,
+                    0,
+                    format!("could not be copied ({e}), the import stopped here"),
+                );
+                failed = Some(e);
+            }
         }
-        std::fs::copy(&src, &dst).map_err(|e| Error::io(&dst, e))?;
-        s.assets += 1;
     }
-    s.unmapped = out.report.entries.len();
     let summary = format!(
-        "Imported {} pages, {} journals and {} assets from `{}` on {}. {} files were already in the vault and were left alone.",
+        "Imported {} pages, {} journals and {} assets from `{}` on {}. {} files were already in the vault and were left alone.{}",
         s.pages,
         s.journals,
         s.assets,
         graph.display(),
         chrono::Local::now().date_naive(),
-        s.skipped
+        s.skipped,
+        if failed.is_some() {
+            " The import stopped on an error and is incomplete."
+        } else {
+            ""
+        }
     );
-    vault.write(&s.report, &out.report.render(&summary))?;
-    Ok(s)
+    let written = vault.write(&s.report, &out.report.render(&summary));
+    match failed {
+        Some(e) => Err(e),
+        None => {
+            written?;
+            Ok(s)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -578,11 +673,180 @@ mod tests {
         let s = run(&vault, &cfg, &graph, "In/").unwrap();
         assert_eq!((s.pages, s.journals, s.assets), (0, 0, 0));
         assert_eq!(s.skipped, 9);
+        // The files left alone are not constructs the mapping could not map.
+        assert_eq!(s.unmapped, 9);
         let report = vault.read("In/import-report.md").unwrap();
         assert!(
             report.contains("already in the vault, not written"),
             "{report}"
         );
+    }
+
+    #[test]
+    fn a_non_ascii_id_is_not_sliced_mid_character() {
+        let cfg = AppConfig::default();
+        let files = vec![SourceFile {
+            path: "pages/a.md".into(),
+            text: "- one\n  id:: aaaaaaa\u{e9}b\n".into(),
+        }];
+        let out = map_graph(
+            &files,
+            &Options {
+                dest: "",
+                config: &cfg,
+            },
+        );
+        assert_eq!(out.pages[0].text, "- one ^aaaaaaa\u{e9}\n");
+    }
+
+    #[test]
+    fn an_id_on_a_code_block_is_reported_and_not_linked() {
+        let cfg = AppConfig::default();
+        let files = vec![
+            SourceFile {
+                path: "pages/a.md".into(),
+                text:
+                    "- ```rust\n  fn x() {}\n  ```\n  id:: 64f1a2b3-0000-4000-8000-000000000001\n"
+                        .into(),
+            },
+            SourceFile {
+                path: "pages/b.md".into(),
+                text: "- ((64f1a2b3-0000-4000-8000-000000000001))\n".into(),
+            },
+        ];
+        let out = map_graph(
+            &files,
+            &Options {
+                dest: "",
+                config: &cfg,
+            },
+        );
+        assert!(!out.pages[0].text.contains('^'), "{}", out.pages[0].text);
+        assert_eq!(
+            out.pages[1].text,
+            "- ((64f1a2b3-0000-4000-8000-000000000001))\n"
+        );
+        let whats: Vec<_> = out.report.entries.iter().map(|e| e.what.as_str()).collect();
+        assert!(
+            whats
+                .iter()
+                .any(|w| w.starts_with("`id::` on a code block")),
+            "{whats:?}"
+        );
+    }
+
+    #[test]
+    fn an_uppercase_extension_is_still_markdown() {
+        let cfg = AppConfig::default();
+        let files = vec![
+            SourceFile {
+                path: "pages/Note.MD".into(),
+                text: "- x\n".into(),
+            },
+            SourceFile {
+                path: "journals/2026_01_02.MD".into(),
+                text: "- j\n".into(),
+            },
+        ];
+        let out = map_graph(
+            &files,
+            &Options {
+                dest: "",
+                config: &cfg,
+            },
+        );
+        let paths: Vec<_> = out.pages.iter().map(|m| m.path.as_str()).collect();
+        assert_eq!(paths, vec!["Note.md", "Daily/2026-01-02.md"]);
+        assert!(out.report.is_empty(), "{:?}", out.report.entries);
+    }
+
+    #[test]
+    fn a_title_that_ends_in_md_keeps_its_whole_name_in_links() {
+        let cfg = AppConfig::default();
+        let files = vec![
+            SourceFile {
+                path: "pages/a.md".into(),
+                text: "title:: My Notes.md\n\n- one\n  id:: 64f1a2b3-0000-4000-8000-000000000001\n"
+                    .into(),
+            },
+            SourceFile {
+                path: "pages/b.md".into(),
+                text: "- ((64f1a2b3-0000-4000-8000-000000000001))\n".into(),
+            },
+        ];
+        let out = map_graph(
+            &files,
+            &Options {
+                dest: "",
+                config: &cfg,
+            },
+        );
+        assert_eq!(out.pages[0].path, "My Notes.md.md");
+        assert_eq!(out.pages[1].text, "- [[My Notes.md#^64f1a2b3]]\n");
+    }
+
+    #[test]
+    fn two_pages_that_want_one_file_keep_the_first_and_report_the_second() {
+        let cfg = AppConfig::default();
+        let files = vec![
+            SourceFile {
+                path: "pages/a.md".into(),
+                text: "title:: B\n\n- from a\n".into(),
+            },
+            SourceFile {
+                path: "pages/b.md".into(),
+                text: "- from b\n".into(),
+            },
+        ];
+        let out = map_graph(
+            &files,
+            &Options {
+                dest: "",
+                config: &cfg,
+            },
+        );
+        let paths: Vec<_> = out.pages.iter().map(|m| m.path.as_str()).collect();
+        assert_eq!(paths, vec!["B.md"]);
+        assert_eq!(out.pages[0].text, "\n- from a\n");
+        let e = out.report.entries.last().unwrap();
+        assert_eq!(e.file, "pages/b.md");
+        assert_eq!(
+            e.what,
+            "maps to `b.md`, which `pages/a.md` already uses, not imported"
+        );
+    }
+
+    #[test]
+    fn a_file_that_is_not_text_is_reported_not_imported_as_empty() {
+        let graph = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(graph.path().join("pages")).unwrap();
+        std::fs::write(graph.path().join("pages/binary.md"), [0xff, 0xfe, b'a']).unwrap();
+        std::fs::write(graph.path().join("pages/ok.md"), "- x\n").unwrap();
+        let d = tempfile::tempdir().unwrap();
+        let vault = Vault::open(d.path()).unwrap();
+        let s = run(&vault, &AppConfig::default(), graph.path(), "").unwrap();
+        assert_eq!(s.pages, 1);
+        assert!(!d.path().join("binary.md").exists());
+        let report = vault.read("import-report.md").unwrap();
+        assert!(report.contains("### `pages/binary.md`"), "{report}");
+        assert!(report.contains("could not be read as text"), "{report}");
+    }
+
+    #[test]
+    fn a_page_that_cannot_be_written_still_leaves_a_report() {
+        let graph = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(graph.path().join("pages")).unwrap();
+        std::fs::write(graph.path().join("pages/a___b.md"), "- x\n").unwrap();
+        let d = tempfile::tempdir().unwrap();
+        let vault = Vault::open(d.path()).unwrap();
+        // `a` is a file, so the folder `a/b.md` needs cannot be made.
+        vault.create("a", "in the way").unwrap();
+        let err = run(&vault, &AppConfig::default(), graph.path(), "").unwrap_err();
+        assert!(matches!(err, Error::Io { .. }), "{err}");
+        let report = vault.read("import-report.md").unwrap();
+        assert!(report.contains("### `pages/a___b.md`"), "{report}");
+        assert!(report.contains("could not be written"), "{report}");
+        assert!(report.contains("stopped on an error"), "{report}");
     }
 
     #[test]

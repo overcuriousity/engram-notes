@@ -3,7 +3,7 @@
 
 use crate::import::Report;
 use regex::{Captures, Regex};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
 /// uuid (lowercase) → (page link name, anchor without `^`).
@@ -33,10 +33,15 @@ fn link(refs: &Refs, uuid: &str, embed: bool) -> Option<String> {
 
 pub fn rewrite(text: &str, refs: &Refs, file: &str, line: usize, report: &mut Report) -> String {
     let mut unknown = Vec::new();
+    // An unresolved `{{embed ((uuid))}}` is left as written, so the plain
+    // reference pass sees it again; a uuid is reported once per line.
+    let mut seen = HashSet::new();
     let mut resolve = |c: &Captures, embed: bool| match link(refs, &c[1], embed) {
         Some(l) => l,
         None => {
-            unknown.push(c[0].to_owned());
+            if seen.insert(c[1].to_lowercase()) {
+                unknown.push(c[0].to_owned());
+            }
             c[0].to_owned()
         }
     };
@@ -153,6 +158,26 @@ mod tests {
         assert_eq!(
             (rep.entries[0].file.as_str(), rep.entries[0].line),
             ("pages/x.md", 3)
+        );
+    }
+
+    #[test]
+    fn an_unresolvable_embed_is_reported_once() {
+        let mut rep = Report::default();
+        let s = rewrite(
+            "{{embed ((deadbeef-0000-4000-8000-000000000009))}}",
+            &refs(),
+            "pages/x.md",
+            3,
+            &mut rep,
+        );
+        assert_eq!(s, "{{embed ((deadbeef-0000-4000-8000-000000000009))}}");
+        let whats: Vec<_> = rep.entries.iter().map(|e| e.what.as_str()).collect();
+        assert_eq!(
+            whats,
+            vec![
+                "reference `{{embed ((deadbeef-0000-4000-8000-000000000009))}}` has no block in this graph, kept as text"
+            ]
         );
     }
 
