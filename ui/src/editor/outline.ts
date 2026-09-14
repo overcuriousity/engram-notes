@@ -49,7 +49,9 @@ function onItem(f: (lines: string[], i: number, unit: number) => { lines: string
     if (!O.parseItem(lines[line])) return false;
     const r = f(lines, line, getIndentUnit(state));
     if (!r) return true;
-    const shift = O.indentOf(r.lines[r.line]) - O.indentOf(lines[line]);
+    // Characters, not columns: setIndent rewrites a tab as spaces, so the two
+    // differ by more than the indent did on a tab-indented item.
+    const shift = O.indentChars(r.lines[r.line]) - O.indentChars(lines[line]);
     dispatch(applyLines(state, lines, r.lines, r.line, Math.max(0, col + shift)));
     return true;
   };

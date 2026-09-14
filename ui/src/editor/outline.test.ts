@@ -63,6 +63,10 @@ describe("outline commands", () => {
     expect(run(enterInList, stateOf("- a\n  - b", 9)).ok).toBe(false);
   });
 
+  it("keeps the cursor on its character when a tab indent is rewritten as spaces", () => {
+    expect(run(indentItem, stateOf("\t- ab", 4))).toEqual({ ok: true, doc: "      - ab", head: 9 });
+  });
+
   it("indents and outdents the subtree under the cursor, keeping the cursor on its text", () => {
     expect(run(indentItem, stateOf("- a\n- b\n  - c", 5))).toEqual({ ok: true, doc: "- a\n  - b\n    - c", head: 7 });
     expect(run(outdentItem, stateOf("- a\n  - b\n    - c", 7))).toEqual({ ok: true, doc: "- a\n- b\n  - c", head: 5 });
