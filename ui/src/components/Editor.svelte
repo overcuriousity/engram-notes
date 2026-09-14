@@ -5,13 +5,14 @@
   import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
   import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
   import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
-  import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+  import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown";
   import { yamlFrontmatter } from "@codemirror/lang-yaml";
   import { languages } from "@codemirror/language-data";
+  import { indentUnit } from "@codemirror/language";
   import { editorTheme, markdownHighlight } from "../editor/theme";
   import { livePreview } from "../editor/livePreview";
   import { completions } from "../editor/completions";
-  import { markdownBrackets } from "../editor/outline";
+  import { markdownBrackets, markdownEnter } from "../editor/outline";
   import { textDiff } from "../lib/textdiff";
 
   interface Props {
@@ -28,8 +29,9 @@
     titles: () => [string, string][];
     tags: () => string[];
     image: (target: string) => string | null;
+    indent: number;
   }
-  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, titles, tags, image }: Props = $props();
+  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, titles, tags, image, indent }: Props = $props();
   let host: HTMLDivElement;
   // State, so effects that need the view run again once it exists.
   let view = $state.raw<EditorView>();
@@ -53,9 +55,10 @@
           editorTheme,
           markdownHighlight,
           EditorView.lineWrapping,
+          indentUnit.of(" ".repeat(indent)),
           modeComp.of(forMode(mode)),
           completions(titles, tags),
-          keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+          keymap.of([...closeBracketsKeymap, { key: "Enter", run: markdownEnter }, ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onchange(u.state.doc.toString());
           }),

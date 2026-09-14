@@ -94,6 +94,7 @@
         titles={() => app.titles}
         tags={() => tagList}
         {image}
+        indent={app.config?.editor.indent ?? 2}
       />
     {/if}
   </div>
