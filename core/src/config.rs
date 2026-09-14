@@ -234,6 +234,8 @@ pub fn daily_note_path(cfg: &AppConfig, today: chrono::NaiveDate) -> String {
 pub struct Snippet {
     pub name: String,
     pub css: String,
+    /// Why the file could not be read, if it could not; `css` is then empty.
+    pub error: Option<String>,
 }
 
 pub fn snippets_dir(vault: &Vault) -> PathBuf {
@@ -241,7 +243,9 @@ pub fn snippets_dir(vault: &Vault) -> PathBuf {
 }
 
 /// Every `.css` file in the snippets folder, by name. The folder is made on
-/// the first look so there is somewhere to drop a file.
+/// the first look so there is somewhere to drop a file. A file that will not
+/// read is listed with its error, so one bad file does not take the rest of
+/// the user's styling down with it.
 pub fn snippets(vault: &Vault) -> Result<Vec<Snippet>> {
     let dir = snippets_dir(vault);
     std::fs::create_dir_all(&dir).map_err(|e| Error::io(&dir, e))?;
@@ -258,8 +262,11 @@ pub fn snippets(vault: &Vault) -> Result<Vec<Snippet>> {
         if !is_css || name.starts_with('.') || !path.is_file() {
             continue;
         }
-        let css = std::fs::read_to_string(&path).map_err(|e| Error::io(&path, e))?;
-        out.push(Snippet { name, css });
+        let (css, error) = match std::fs::read_to_string(&path) {
+            Ok(css) => (css, None),
+            Err(e) => (String::new(), Some(e.to_string())),
+        };
+        out.push(Snippet { name, css, error });
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(out)
@@ -423,6 +430,25 @@ mod tests {
             vec!["Aa", "wide"]
         );
         assert_eq!(got[1].css, ":root { --file-line-width: 900px; }");
+        assert!(got.iter().all(|s| s.error.is_none()));
+    }
+
+    #[test]
+    fn a_snippet_that_will_not_read_is_listed_with_its_error() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let dir = d.path().join(".engram-notes/snippets");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("good.css"), "b {}").unwrap();
+        std::fs::write(dir.join("bad.css"), [0xff, 0xfe, 0x00]).unwrap();
+        let got = snippets(&v).unwrap();
+        assert_eq!(
+            got.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            vec!["bad", "good"]
+        );
+        assert!(got[0].error.is_some());
+        assert_eq!(got[0].css, "");
+        assert_eq!(got[1].css, "b {}");
     }
 
     #[test]

@@ -61,8 +61,9 @@
       </div>
       {#each app.snippets as s (s.name)}
         <label>{s.name}
-          <input type="checkbox" checked={cfg.css_snippets.includes(s.name)} onchange={(e) => setSnippet(s.name, e.currentTarget.checked)} />
+          <input type="checkbox" disabled={!!s.error} checked={cfg.css_snippets.includes(s.name)} onchange={(e) => setSnippet(s.name, e.currentTarget.checked)} />
         </label>
+        {#if s.error}<div class="hint muted">{s.error}</div>{/if}
       {:else}
         <div class="hint muted">No snippets yet. Drop a <code>.css</code> file in the folder and reload.</div>
       {/each}

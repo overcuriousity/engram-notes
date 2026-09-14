@@ -1,9 +1,9 @@
 import type { Snippet } from "./api";
 
-/** The snippets to apply, in file order: those named in `enabled` that exist. */
+/** The snippets to apply, in file order: those named in `enabled` that read. */
 export function activeSnippets(all: Snippet[], enabled: string[]): Snippet[] {
   const on = new Set(enabled);
-  return all.filter((s) => on.has(s.name));
+  return all.filter((s) => on.has(s.name) && !s.error);
 }
 
 /** `enabled` with `name` switched `on` or off, order kept, no duplicates. */

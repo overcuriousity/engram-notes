@@ -38,8 +38,9 @@ class AppStateStore {
   templates = $state<string[]>([]);
   // Every snippet file; `config.css_snippets` says which are on.
   snippets = $state<api.Snippet[]>([]);
-  // The Related pane asks the editor showing this note to insert at the cursor.
-  insertion = $state<{ path: string; text: string; n: number } | null>(null);
+  // The Related pane and the template picker ask one pane's editor to insert
+  // at its cursor. `replace` is a template taking the place of a selection.
+  insertion = $state<{ pane: number; path: string; text: string; replace: boolean; n: number } | null>(null);
   private nextId = 2;
 
   get pane(): Pane {
@@ -180,8 +181,8 @@ class AppStateStore {
     return this.openNote(path, line, "open_from_search", query);
   }
 
-  insertAtCursor(path: string, text: string) {
-    this.insertion = { path, text, n: (this.insertion?.n ?? 0) + 1 };
+  insertAtCursor(pane: number, path: string, text: string, replace = false) {
+    this.insertion = { pane, path, text, replace, n: (this.insertion?.n ?? 0) + 1 };
   }
 
   activate(paneId: number, index: number) {

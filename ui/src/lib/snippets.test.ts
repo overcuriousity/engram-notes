@@ -11,6 +11,10 @@ describe("activeSnippets", () => {
     expect(activeSnippets(all, ["b", "gone", "a"]).map((s) => s.name)).toEqual(["a", "b"]);
     expect(activeSnippets(all, [])).toEqual([]);
   });
+  it("drops a snippet that would not read, so the rest keep applying", () => {
+    const withBad = [...all, { name: "bad", css: "", error: "stream did not contain valid UTF-8" }];
+    expect(activeSnippets(withBad, ["a", "bad", "b"]).map((s) => s.name)).toEqual(["a", "b"]);
+  });
 });
 
 describe("toggleSnippet", () => {

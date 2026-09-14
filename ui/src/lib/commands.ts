@@ -23,10 +23,11 @@ export async function newBase(dir = "") {
   await app.openNote(n);
 }
 
-/** The note a template can go into: the active tab, when it is a note in an editing mode. */
-export function templateTarget(): string | null {
+/** Where an insertion can go: the active tab, when it is a note in an editing mode. */
+export function templateTarget(): { pane: number; path: string } | null {
   const t = app.activeTab;
-  return t && fileKind(t.path) === "note" && t.mode !== "reading" ? t.path : null;
+  if (!t || fileKind(t.path) !== "note" || t.mode === "reading") return null;
+  return { pane: app.activePane, path: t.path };
 }
 
 // Obsidian's picker over the templates folder; the folder is read afresh each time.

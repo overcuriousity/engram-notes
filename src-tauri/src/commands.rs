@@ -614,10 +614,11 @@ mod tests {
         let s = Snippet {
             name: "wide".into(),
             css: "b {}".into(),
+            error: None,
         };
         assert_eq!(
             serde_json::to_value(&s).unwrap(),
-            json!({"name": "wide", "css": "b {}"})
+            json!({"name": "wide", "css": "b {}", "error": null})
         );
         assert_eq!(title_of("Daily/2026-09-14.md"), "2026-09-14");
         assert_eq!(title_of("Note.md"), "Note");

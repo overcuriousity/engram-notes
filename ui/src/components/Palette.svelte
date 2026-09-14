@@ -52,7 +52,7 @@
         run: async () => {
           const into = templateTarget();
           if (!into) return app.say("Open a note in an editing mode to insert a template.");
-          app.insertAtCursor(into, await renderTemplate(m.path, into));
+          app.insertAtCursor(into.pane, into.path, await renderTemplate(m.path, into.path), true);
         },
       }));
     }

@@ -18,7 +18,7 @@ export interface AppConfig {
   };
   embed: { model_dir: string | null; batch: number };
 }
-export interface Snippet { name: string; css: string }
+export interface Snippet { name: string; css: string; error?: string | null }
 export interface VaultInfo { root: string; config: AppConfig; stats: RebuildStats; index_recreated: boolean; watch_error: string | null }
 export interface NoteText { path: string; text: string; mtime_ms: number }
 export interface LinkRow {
