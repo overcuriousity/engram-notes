@@ -3,7 +3,7 @@ import { EditorState, type Transaction } from "@codemirror/state";
 import { ensureSyntaxTree, indentUnit, codeFolding } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { closeBrackets, insertBracket } from "@codemirror/autocomplete";
-import { markdownBrackets, markdownEnter } from "./outline";
+import { enterInList, indentItem, markdownBrackets, markdownEnter, moveItemDown, moveItemUp, outdentItem } from "./outline";
 
 function stateOf(doc: string, cursor: number | { anchor: number; head: number }, indent = 2) {
   const state = EditorState.create({
@@ -52,5 +52,27 @@ describe("enter", () => {
     expect(run(markdownEnter, stateOf("1. a", 4)).doc).toBe("1. a\n2. ");
     expect(run(markdownEnter, stateOf("- [ ] a", 7)).doc).toBe("- [ ] a\n- [ ] ");
     expect(run(markdownEnter, stateOf("- a\n- ", 6)).doc).toBe("- a\n");
+  });
+});
+
+describe("outline commands", () => {
+  it("outdents an empty nested item on Enter and leaves the rest to the markdown keymap", () => {
+    expect(run(enterInList, stateOf("- a\n  - ", 8))).toEqual({ ok: true, doc: "- a\n- ", head: 6 });
+    expect(run(enterInList, stateOf("- a\n  - [ ] ", 12))).toEqual({ ok: true, doc: "- a\n- [ ] ", head: 10 });
+    expect(run(enterInList, stateOf("- a\n- ", 6)).ok).toBe(false);
+    expect(run(enterInList, stateOf("- a\n  - b", 9)).ok).toBe(false);
+  });
+
+  it("indents and outdents the subtree under the cursor, keeping the cursor on its text", () => {
+    expect(run(indentItem, stateOf("- a\n- b\n  - c", 5))).toEqual({ ok: true, doc: "- a\n  - b\n    - c", head: 7 });
+    expect(run(outdentItem, stateOf("- a\n  - b\n    - c", 7))).toEqual({ ok: true, doc: "- a\n- b\n  - c", head: 5 });
+    expect(run(outdentItem, stateOf("- a", 1)).ok).toBe(true);
+    expect(run(indentItem, stateOf("prose", 2)).ok).toBe(false);
+  });
+
+  it("moves a subtree among its siblings", () => {
+    expect(run(moveItemDown, stateOf("- a\n  - a1\n- b", 1))).toEqual({ ok: true, doc: "- b\n- a\n  - a1", head: 5 });
+    expect(run(moveItemUp, stateOf("- b\n- a\n  - a1", 5))).toEqual({ ok: true, doc: "- a\n  - a1\n- b", head: 1 });
+    expect(run(moveItemUp, stateOf("- a\n- b", 1)).ok).toBe(true);
   });
 });

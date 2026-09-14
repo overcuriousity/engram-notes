@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { Compartment, EditorState, Transaction } from "@codemirror/state";
   import { EditorView, keymap, drawSelection, highlightActiveLine } from "@codemirror/view";
-  import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+  import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
   import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
   import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
   import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown";
@@ -12,7 +12,7 @@
   import { editorTheme, markdownHighlight } from "../editor/theme";
   import { livePreview } from "../editor/livePreview";
   import { completions } from "../editor/completions";
-  import { markdownBrackets, markdownEnter } from "../editor/outline";
+  import { markdownBrackets, outlineKeymap } from "../editor/outline";
   import { textDiff } from "../lib/textdiff";
 
   interface Props {
@@ -58,7 +58,7 @@
           indentUnit.of(" ".repeat(indent)),
           modeComp.of(forMode(mode)),
           completions(titles, tags),
-          keymap.of([...closeBracketsKeymap, { key: "Enter", run: markdownEnter }, ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+          keymap.of([...closeBracketsKeymap, ...outlineKeymap, ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onchange(u.state.doc.toString());
           }),
