@@ -9,12 +9,15 @@ use std::path::{Path, PathBuf};
 #[serde(default)]
 pub struct EditorConfig {
     pub default_mode: String,
+    /// Spaces per outline level. Two is CommonMark-correct under `- `.
+    pub indent: usize,
 }
 
 impl Default for EditorConfig {
     fn default() -> Self {
         EditorConfig {
             default_mode: "live".into(),
+            indent: 2,
         }
     }
 }
@@ -307,5 +310,20 @@ mod tests {
         assert!(!cfg.memory.enabled);
         assert_eq!(cfg.memory.spread_max, 3);
         assert_eq!(cfg.search.rrf_k, 60.0);
+    }
+
+    #[test]
+    fn editor_indent_defaults_to_two_spaces() {
+        assert_eq!(AppConfig::default().editor.indent, 2);
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        std::fs::write(
+            d.path().join(".engram-notes/app.json"),
+            r#"{"editor":{"default_mode":"source"}}"#,
+        )
+        .unwrap();
+        let cfg = load_config(&v).unwrap();
+        assert_eq!(cfg.editor.default_mode, "source");
+        assert_eq!(cfg.editor.indent, 2);
     }
 }

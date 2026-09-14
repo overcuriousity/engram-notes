@@ -4,7 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 export interface FileEntry { path: string; mtime_ms: number; size: number; is_markdown: boolean }
 export interface RebuildStats { added: number; updated: number; removed: number; unchanged: number }
 export interface AppConfig {
-  editor: { default_mode: "live" | "source" | "reading" };
+  editor: { default_mode: "live" | "source" | "reading"; indent: number };
   daily_notes: { folder: string; template: string | null; format: string };
   hotkeys: Record<string, string>;
   theme: "system" | "light" | "dark";

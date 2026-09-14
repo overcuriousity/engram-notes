@@ -45,6 +45,9 @@
           <option value="reading">Reading</option>
         </select>
       </label>
+      <label>Indent width
+        <input type="number" min="1" max="8" step="1" bind:value={cfg.editor.indent} onchange={save} />
+      </label>
 
       <div class="pane-title">Daily notes</div>
       <label>Folder <input bind:value={cfg.daily_notes.folder} onchange={save} /></label>
