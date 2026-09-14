@@ -11,7 +11,8 @@ state.
   — the direction: writing is the centre, engram's retrieval lives inside the
   linking gesture, and the vault can say what it knows.
 
-Legend: ✅ shipped on `master` · 🔶 in review · ⬜ not started.
+Legend: ✅ shipped on `master` · 🔶 merged or in review, smoke not yet run ·
+⬜ not started.
 
 ## The position
 
@@ -30,7 +31,8 @@ cannot avoid.
 
 ## 0.1 — The foundation ✅
 
-Everything the first design describes, less the two items marked below.
+Everything the first design describes, less four items that design defers
+itself; they are listed under *Later*.
 
 - ✅ Vault: files are the truth; `.engram-notes/` travels with the vault;
   watcher, external-edit conflict bar, atomic writes, rename with link rewrite.
@@ -47,13 +49,13 @@ Everything the first design describes, less the two items marked below.
   the divider, a similarity floor (`docs/memory.md`).
 - ✅ Memory: events, sittings, activation, association, bounded priming,
   spread, the Related pane, `memory.enabled`, one button to forget.
-- ⬜ Card view for bases; bases embedded in notes.
-- ⬜ Templates beyond the daily note; a user stylesheet picker.
 
 ## 0.2 — The editor's floor 🔶
 
 Parity with Obsidian and its outliner plugin, over ordinary markdown lists.
-[PR #1](https://github.com/overcuriousity/engram-notes/pull/1).
+[PR #1](https://github.com/overcuriousity/engram-notes/pull/1) is merged; what
+remains is smoke lines 49–54 in the real window and the fold gutter measured
+beside Obsidian (`docs/memory.md`).
 
 - 🔶 A bracket typed over a selection wraps it.
 - 🔶 Enter continues a list; on an empty item it drops a level of markup.
@@ -124,7 +126,9 @@ and nothing is created without a click.
 ## Later ⬜
 
 Provenance and capture into the vault; Ask that cites and abstains, behind a
-user-supplied endpoint; card views; the graph's remaining polish.
+user-supplied endpoint; the graph's remaining polish. And the four items the
+foundation defers: card view for bases, bases embedded in notes, templates
+beyond the daily note, a user stylesheet picker.
 
 ## Alongside, not as a phase ⬜
 
