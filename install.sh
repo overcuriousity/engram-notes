@@ -12,7 +12,7 @@ die() { printf 'engram-notes: %s\n' "$1" >&2; exit 1; }
 case "$(uname -s)" in
   Linux) ;;
   Darwin) die "macOS builds are not published yet; build from source instead" ;;
-  *) die "Windows builds are planned but not published yet; build from source instead" ;;
+  *) die "on Windows, download engram-notes-x86_64-pc-windows-msvc.zip from https://github.com/$repo/releases/$tag" ;;
 esac
 
 case "$(uname -m)" in

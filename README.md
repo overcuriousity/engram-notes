@@ -26,7 +26,10 @@ Debian and Ubuntu.
 
     engram-notes ~/my-vault
 
-Windows and macOS builds are planned; until then, build from source.
+On Windows, download `engram-notes-x86_64-pc-windows-msvc.zip` from
+[the latest build](https://github.com/overcuriousity/engram-notes/releases/tag/latest)
+and run `engram-notes.exe`. It is unsigned, so SmartScreen warns the first
+time. macOS builds are planned; until then, build from source.
 
 ## Build
 

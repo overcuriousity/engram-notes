@@ -39,20 +39,62 @@ jobs:
         working-directory: ui
       - run: pnpm tauri build --no-bundle
         working-directory: ui
-
       - name: Package
-        id: package
         run: |
-          triple=x86_64-unknown-linux-gnu
-          name=engram-notes-$triple
           mkdir -p dist
-          tar -czf "dist/$name.tar.gz" -C target/release engram-notes
-          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
-          echo "name=$name" >> "$GITHUB_OUTPUT"
+          tar -czf dist/engram-notes-x86_64-unknown-linux-gnu.tar.gz -C target/release engram-notes
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: dist/*
 
-      # One rolling prerelease, so the installer has a stable URL. Recreated
-      # rather than edited, because the tag has to follow master.
-      - name: Publish the rolling latest release
+  windows:
+    name: windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+        working-directory: ui
+      - run: pnpm tauri build --no-bundle
+        working-directory: ui
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path target/release/engram-notes.exe `
+            -DestinationPath dist/engram-notes-x86_64-pc-windows-msvc.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: dist/*
+
+  # One rolling prerelease holding every platform, so the installer has a URL
+  # that does not move. Recreated rather than edited: the tag follows master.
+  publish:
+    name: publish the rolling latest release
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd dist
+          for f in *.tar.gz *.zip; do sha256sum "$f" > "$f.sha256"; done
+          ls -l
+      - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -60,21 +102,18 @@ jobs:
           Built from \`${GITHUB_SHA:0:7}\` on $(date -u +%Y-%m-%dT%H:%MZ).
           The \`latest\` tag moves with every commit to master; it is not a release.
 
-          Needs webkit2gtk 4.1 and GTK 3 at runtime. Install with:
+          **Linux** needs webkit2gtk 4.1 and GTK 3 at runtime:
 
               curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/master/install.sh | sh
+
+          **Windows**: download the .zip below and run \`engram-notes.exe\`. Unsigned, so SmartScreen will warn.
           EOF
 
-          gh release delete latest --yes --cleanup-tag || true
+          gh release delete latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
           gh release create latest \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "engram-notes (latest master)" \
             --notes-file "$RUNNER_TEMP/notes.md" \
-            "dist/${{ steps.package.outputs.name }}.tar.gz" \
-            "dist/${{ steps.package.outputs.name }}.tar.gz.sha256"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.package.outputs.name }}
-          path: dist/*
+            dist/*
