@@ -2,7 +2,7 @@ import { EditorSelection, type EditorState, type Extension, type StateCommand } 
 import type { KeyBinding } from "@codemirror/view";
 import { indentLess, indentMore } from "@codemirror/commands";
 import { acceptCompletion } from "@codemirror/autocomplete";
-import { getIndentUnit } from "@codemirror/language";
+import { codeFolding, foldGutter, foldNodeProp, getIndentUnit } from "@codemirror/language";
 import { insertNewlineContinueMarkupCommand, markdownLanguage } from "@codemirror/lang-markdown";
 import * as O from "../lib/outline";
 
@@ -88,3 +88,38 @@ export const outlineKeymap: KeyBinding[] = [
   { key: "Enter", run: enterInList },
   { key: "Enter", run: markdownEnter },
 ];
+
+// lang-markdown makes every block foldable. Obsidian folds headings and list
+// items only; a later prop source wins, so the rest are switched off here.
+export const listOnlyFolding = {
+  props: [
+    foldNodeProp.add({
+      Paragraph: () => null,
+      Blockquote: () => null,
+      FencedCode: () => null,
+      CodeBlock: () => null,
+      HTMLBlock: () => null,
+      Table: () => null,
+      LinkReference: () => null,
+      CommentBlock: () => null,
+      ProcessingInstructionBlock: () => null,
+    }),
+  ],
+};
+
+const CHEVRON =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+
+export function outlineFolding(): Extension {
+  return [
+    codeFolding(),
+    foldGutter({
+      markerDOM(open) {
+        const s = document.createElement("span");
+        s.className = `cm-fold-marker ${open ? "open" : "closed"}`;
+        s.innerHTML = CHEVRON;
+        return s;
+      },
+    }),
+  ];
+}

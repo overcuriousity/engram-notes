@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { EditorState, type Transaction } from "@codemirror/state";
-import { ensureSyntaxTree, indentUnit, codeFolding } from "@codemirror/language";
+import { ensureSyntaxTree, indentUnit, codeFolding, foldable } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { closeBrackets, insertBracket } from "@codemirror/autocomplete";
-import { enterInList, indentItem, markdownBrackets, markdownEnter, moveItemDown, moveItemUp, outdentItem } from "./outline";
+import { enterInList, indentItem, listOnlyFolding, markdownBrackets, markdownEnter, moveItemDown, moveItemUp, outdentItem } from "./outline";
 
 function stateOf(doc: string, cursor: number | { anchor: number; head: number }, indent = 2) {
   const state = EditorState.create({
     doc,
     selection: typeof cursor === "number" ? { anchor: cursor } : cursor,
     extensions: [
-      markdown({ base: markdownLanguage }),
+      markdown({ base: markdownLanguage, extensions: [listOnlyFolding] }),
       markdownBrackets,
       indentUnit.of(" ".repeat(indent)),
       closeBrackets(),
@@ -74,5 +74,18 @@ describe("outline commands", () => {
     expect(run(moveItemDown, stateOf("- a\n  - a1\n- b", 1))).toEqual({ ok: true, doc: "- b\n- a\n  - a1", head: 5 });
     expect(run(moveItemUp, stateOf("- b\n- a\n  - a1", 5))).toEqual({ ok: true, doc: "- a\n  - a1\n- b", head: 1 });
     expect(run(moveItemUp, stateOf("- a\n- b", 1)).ok).toBe(true);
+  });
+});
+
+describe("folding", () => {
+  it("folds list items and headings, never paragraphs", () => {
+    const s = stateOf("- a\n  - b\n\npara one\npara two\n# H\ntext", 0);
+    const l = (n: number) => s.doc.line(n);
+    const item = foldable(s, l(1).from, l(1).to)!;
+    expect(item.from).toBe(3);
+    expect(s.doc.sliceString(0, item.to).trimEnd()).toBe("- a\n  - b");
+    expect(foldable(s, l(4).from, l(4).to)).toBeNull();
+    expect(foldable(s, l(6).from, l(6).to)).toEqual({ from: l(6).to, to: s.doc.length });
+    expect(foldable(s, l(2).from, l(2).to)).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Compartment, EditorState, Transaction } from "@codemirror/state";
-  import { EditorView, keymap, drawSelection, highlightActiveLine } from "@codemirror/view";
+  import { EditorView, keymap, drawSelection, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
   import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
   import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
   import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
@@ -12,7 +12,7 @@
   import { editorTheme, markdownHighlight } from "../editor/theme";
   import { livePreview } from "../editor/livePreview";
   import { completions } from "../editor/completions";
-  import { markdownBrackets, outlineKeymap } from "../editor/outline";
+  import { listOnlyFolding, markdownBrackets, outlineFolding, outlineKeymap } from "../editor/outline";
   import { textDiff } from "../lib/textdiff";
 
   interface Props {
@@ -47,11 +47,13 @@
           history(),
           drawSelection(),
           highlightActiveLine(),
+          highlightActiveLineGutter(),
+          outlineFolding(),
           highlightSelectionMatches(),
           closeBrackets(),
           markdownBrackets,
           // GFM for tasks and strikethrough; YAML so frontmatter is not read as a heading.
-          yamlFrontmatter({ content: markdown({ base: markdownLanguage, codeLanguages: languages }) }),
+          yamlFrontmatter({ content: markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [listOnlyFolding] }) }),
           editorTheme,
           markdownHighlight,
           EditorView.lineWrapping,

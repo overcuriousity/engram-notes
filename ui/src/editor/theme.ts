@@ -7,7 +7,15 @@ export const editorTheme = EditorView.theme({
   ".cm-cursor": { borderLeftColor: "var(--fg)" },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": { backgroundColor: "var(--accent-bg) !important" },
   ".cm-activeLine": { backgroundColor: "transparent" },
-  ".cm-gutters": { display: "none" },
+  ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "var(--fg-muted)" },
+  ".cm-foldGutter .cm-gutterElement": { width: "24px", display: "flex", justifyContent: "center", paddingTop: "0.3em" },
+  ".cm-fold-marker": { opacity: "0", width: "16px", height: "16px", cursor: "pointer", transition: "opacity 120ms" },
+  ".cm-fold-marker svg": { display: "block" },
+  ".cm-fold-marker.closed": { opacity: "1", transform: "rotate(-90deg)" },
+  ".cm-gutters:hover .cm-fold-marker, .cm-activeLineGutter .cm-fold-marker": { opacity: "0.6" },
+  ".cm-foldGutter .cm-gutterElement:hover .cm-fold-marker": { opacity: "1" },
+  ".cm-activeLineGutter": { backgroundColor: "transparent" },
+  ".cm-foldPlaceholder": { background: "var(--bg-3)", border: "none", color: "var(--fg-muted)", padding: "0 6px", borderRadius: "3px" },
 });
 
 export const markdownHighlight = syntaxHighlighting(
