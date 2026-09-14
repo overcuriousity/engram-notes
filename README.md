@@ -9,8 +9,24 @@ open licence from Logseq, and the semantic search and memory concepts from
 [engram](https://github.com/overcuriousity/engram), reimplemented locally so
 nothing runs but the app.
 
-Status: design stage. See
+Status: in development, no tagged release yet. See
 [the design](docs/superpowers/specs/2026-09-12-engram-notes-design.md).
+
+## Install
+
+Linux, x86_64:
+
+    curl -fsSL https://raw.githubusercontent.com/overcuriousity/engram-notes/master/install.sh | sh
+
+That fetches the `latest` release — the binary built from the newest commit on
+`master` — verifies its checksum and installs it to `~/.local/bin`. Set
+`ENGRAM_NOTES_BIN_DIR` to install elsewhere. It needs webkit2gtk 4.1 and GTK 3
+at runtime: `webkit2gtk4.1 gtk3` on Fedora, `libwebkit2gtk-4.1-0 libgtk-3-0` on
+Debian and Ubuntu.
+
+    engram-notes ~/my-vault
+
+Windows and macOS builds are planned; until then, build from source.
 
 ## Build
 

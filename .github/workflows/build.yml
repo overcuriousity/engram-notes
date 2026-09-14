@@ -1,0 +1,80 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: build-master
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: linux x86_64
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Tauri system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: pnpm install --frozen-lockfile
+        working-directory: ui
+      - run: pnpm tauri build --no-bundle
+        working-directory: ui
+
+      - name: Package
+        id: package
+        run: |
+          triple=x86_64-unknown-linux-gnu
+          name=engram-notes-$triple
+          mkdir -p dist
+          tar -czf "dist/$name.tar.gz" -C target/release engram-notes
+          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      # One rolling prerelease, so the installer has a stable URL. Recreated
+      # rather than edited, because the tag has to follow master.
+      - name: Publish the rolling latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > "$RUNNER_TEMP/notes.md" <<EOF
+          Built from \`${GITHUB_SHA:0:7}\` on $(date -u +%Y-%m-%dT%H:%MZ).
+          The \`latest\` tag moves with every commit to master; it is not a release.
+
+          Needs webkit2gtk 4.1 and GTK 3 at runtime. Install with:
+
+              curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/master/install.sh | sh
+          EOF
+
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "engram-notes (latest master)" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            "dist/${{ steps.package.outputs.name }}.tar.gz" \
+            "dist/${{ steps.package.outputs.name }}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: dist/*
