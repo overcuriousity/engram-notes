@@ -1,8 +1,8 @@
-# engram-notes: writing first — the outliner, linking, and recall while you write
+# engram-notes: writing first — the editor, linking, import, and recall while you write
 
-Written 2026-09-14. This amends the design of 2026-09-12, which stands except
-where this says otherwise. It settles what engram-notes is for, and therefore
-what the next four releases build.
+Written 2026-09-14, revised the same day after review. This amends the design
+of 2026-09-12, which stands except where this says otherwise. It settles what
+engram-notes is for, and therefore what the next five releases build.
 
 ## Why
 
@@ -12,21 +12,25 @@ accordingly: the Obsidian half is largely present, the engram half sits in a
 side panel. Strip the panel and what is left is a smaller Obsidian.
 
 That is not a position anyone can hold. Obsidian has been free for commercial
-use since February 2025, needs no account, and carries nine years of polish and
-a plugin ecosystem. Competing on its own terms — the faithful, fast filing
-cabinet — is a losing game, and "the same, but open source" only persuades
-people who were already persuaded.
+use since February 2025, needs no account, and carries nine years of polish.
+"The same, but open source" persuades only the already persuaded.
 
-The open field is elsewhere, and it is real. Logseq's rewrite has been in beta
-for years and is moving graphs from markdown files into a database, which is
-the reason many of its users chose it; a population is moving. Most of them land
-in Obsidian and miss the outliner. Meanwhile the open-source alternatives each
-give up something essential — SiYuan and Trilium leave plain files behind,
-Anytype and AppFlowy are object stores, Joplin links poorly — and the local-AI
-note apps (Reor, Khoj) prove the demand for semantic recall without being
-daily-driver editors.
+The honest competitor is not Obsidian alone but the stack serious users build
+on it: Obsidian plus an outliner plugin, plus a local-embedding plugin for
+related notes, plus a better search plugin. Against that stack we have three
+real arguments, and only three:
 
-So:
+1. **Open.** GPL, one binary, nothing phones home, and a page that says so.
+2. **One piece instead of five.** The outliner, the search, the recall and the
+   linking are one design that shares one index, not four plugins that each
+   keep their own.
+3. **A memory of use.** Every search, open and link is an event. What the
+   writer reaches for ranks higher; what fires together sits closer. No plugin
+   has this because Obsidian keeps no record of use.
+
+The people this is for exist and are looking. Logseq's rewrite has been in
+beta for years and moves graphs out of markdown files, which is why many chose
+it; those users land in Obsidian and miss the outliner. So:
 
 > **Logseq's ergonomics, Obsidian's files, engram's retrieval inside the
 > gesture.**
@@ -36,289 +40,301 @@ writing, or it is a view you can close.
 
 ## What this changes
 
-- **The graph is demoted.** It is a view among views and can be turned off
-  entirely. It is not the second half of the editor.
-- **The outliner is added**, as editor behaviour over ordinary markdown lists,
-  never as a file format.
-- **Linking becomes the primary engram surface**, not a sidebar. Completion is
-  hybrid; a text-level link targets a passage and is picked by meaning.
-- **The models ship inside the artifact.** No download on first run, no model
-  directory to configure, no network. A reranker ships with them.
-- **Recall while writing** becomes a quiet band beside the text, governed by
-  engram's divider and by a cadence the user sets.
-- **Forgetting is not a feature.** Activation and association remain, purely as
-  ranking and layout signals. Nothing is ever hidden, pruned or proposed for
-  deletion. The vault is also an instrument of investigation and documentation;
-  a tool that tidies things away is disqualified for that use.
+- **The graph is demoted.** A view among views, switchable off entirely.
+- **The editor gets its floor.** Bracket wrapping, list continuation, and
+  outline gestures over ordinary markdown lists. This is parity with Obsidian
+  and its outliner plugin, and it is missing today.
+- **A Logseq importer**, early, because it is the door the named population
+  walks through.
+- **Linking becomes the primary engram surface.** Completion is hybrid; a
+  text-level link targets a passage and is picked by meaning.
+- **The models ship inside the artifact**, embedder and reranker both. No
+  download, no configuration, no network.
+- **The Related pane becomes a recall band**: cursor-aware, divider-governed,
+  with a cadence the writer sets. One surface, not two.
+- **Memory's truth is an event log in the vault.** Activation and association
+  are derived from it, like every other index.
+- **Forgetting is not a feature.** Activation and association are ranking and
+  layout signals only. Nothing is hidden, pruned or proposed for deletion; the
+  vault is also an instrument of investigation and documentation.
 - **No generative AI in the spine.** Ask stays on the roadmap, optional, behind
-  a user-supplied endpoint, and nothing depends on it.
+  a user-supplied endpoint.
 
-## The writing surface
+## The editor's floor
 
-### Outlining on flat markdown
-
-Every outline operation is an ordinary markdown list operation. A file written
-by this editor opens in Obsidian, in Vim and in `cat` and reads cleanly. The
-outliner is input ergonomics; it does not touch the file format. This is
-precisely what Logseq gave up, and why its files travel badly.
-
-- **No forced `- `.** Prose stays prose. Where the user wrote a list, the editor
-  behaves like an outliner.
-- **Indentation is two spaces**, configurable. CommonMark-correct under `- `,
-  and it keeps files narrow.
-- **Fold state is never written to the note.** Logseq's `collapsed:: true` in
-  the text is the second thing to avoid. Fold state lives in the database, keyed
-  by outline path. When a heavy edit invalidates a key the worst case is a
-  wrongly folded item, not a dirty file.
-- **Zoom is view state.** Zooming into an item shows it and its subtree with a
-  breadcrumb; Escape returns. The file does not change.
-
-### Gestures
-
-- `Tab` / `Shift+Tab` indent and outdent the item **together with its subtree**.
-- `Alt+Up` / `Alt+Down` move the item and its subtree among its siblings.
-- `Enter` opens a sibling at the same depth; `Enter` on an empty item outdents
-  it; at the outermost depth it leaves the list.
-- `Backspace` at the start of an item outdents, then merges.
-- A chevron in the gutter folds an item that has children.
-- Ordered lists renumber on indent, outdent and move. Task items (`- [ ]`) are
-  list items and inherit all of the above.
-
-`Tab` is contested by autocompletion, by indentation and by the outline. The
-order is: an open completion popup takes it; otherwise, inside a list item, the
-outline takes it; otherwise it inserts indentation.
-
-### What is missing today, beyond the outliner
+### What is missing today
 
 `ui/src/components/Editor.svelte` builds its keymap from `defaultKeymap`,
 `historyKeymap`, `searchKeymap` and `indentWithTab`. There is no markdown
-keymap, so `Enter` does not continue a list at all, and there is no
-`closeBrackets`, so typing a bracket over a selection replaces the selection
-instead of wrapping it. The outliner is not a layer on top of a working base; it
-is the base that is not there yet.
+keymap, so `Enter` does not continue a list; there is no `closeBrackets`, so
+typing a bracket over a selection replaces the selection instead of wrapping
+it. Both are the first work in this document.
+
+### Wrapping a selection
+
+Select a word, type `[` `[`, and the selection is wrapped, not replaced:
+`[[word]]`, selection preserved. The same for `(`, `` ` ``, `*`, `_` and `"`.
+
+### Outlining over ordinary lists
+
+Every outline operation is an ordinary markdown list operation. A file written
+by this editor opens in Obsidian, in Vim and in `cat` and reads cleanly. The
+outliner is input ergonomics; it does not touch the file format. This is what
+Logseq gave up, and why its files travel badly.
+
+- **No forced `- `.** Prose stays prose. Where the user wrote a list, the editor
+  behaves like an outliner.
+- **Indentation is two spaces**, configurable. CommonMark-correct under `- `.
+- **Fold state is never written to the note.** It lives in the derived
+  database, per machine, keyed by outline path. When a heavy edit invalidates a
+  key the worst case is a wrongly folded item, not a dirty file.
+- **No zoom.** Logseq zooms because its pages are huge. This design has files,
+  and a subtree that deserves its own view deserves its own file.
+
+Gestures: `Tab` / `Shift+Tab` indent and outdent the item **with its subtree**;
+`Alt+Up` / `Alt+Down` move it among its siblings; `Enter` opens a sibling,
+`Enter` on an empty item outdents it and at the outermost depth leaves the
+list; `Backspace` at the start of an item outdents, then merges; a gutter
+chevron folds an item with children. Ordered lists renumber on every operation.
+Task items are list items and inherit all of it.
+
+`Tab` is contested by completion, indentation and the outline. The order: an
+open completion popup takes it; otherwise, inside a list item, the outline
+takes it; otherwise it inserts indentation.
+
+## The Logseq importer
+
+One command: choose a Logseq graph folder, choose a destination folder inside
+the vault. The original is never touched. Everything the importer cannot map is
+written to `import-report.md` in the destination with file and line, so nothing
+is lost silently.
+
+The mapping, in the order the importer applies it:
+
+- `journals/2026_09_14.md` becomes `<daily folder>/2026-09-14.md`.
+- Namespaced page files (`a___b.md`) become folder paths (`a/b.md`).
+- Page-level `key:: value` lines at the top of a file become YAML frontmatter.
+  `title::` renames the file when it differs from the file name.
+- `id:: <uuid>` on a block appends a short anchor `^<id>` to that block's first
+  line, and a table of uuid to (file, anchor) drives the next two rules.
+- `((uuid))` becomes `[[Page#^id]]`; `{{embed ((uuid))}}` becomes
+  `![[Page#^id]]`; `{{embed [[page]]}}` becomes `![[page]]`.
+- `collapsed::` is dropped. Other block-level properties are kept verbatim as
+  text, since Obsidian has no block properties; the report lists them.
+- `TODO` and `DONE` become `- [ ]` and `- [x]`. `DOING`, `LATER`, `NOW`, `WAITING`
+  become `- [ ]` with the word kept. Priorities, `SCHEDULED:` and `DEADLINE:`
+  lines are kept as text.
+- `#[[multi word]]` becomes `[[multi word]]`, since a Logseq tag is a page
+  reference. Single-word `#tag` stays.
+- Tab indentation becomes the configured indent. Bullets are kept: a page that
+  is one list stays one list, and the outliner handles it.
+- `assets/` is copied beside the notes; `logseq/` is ignored.
+
+The importer is a `core` module with no I/O in its mapping, tested on fixture
+graphs, and it is idempotent on its own output.
 
 ## Linking
 
-Three gestures, one idea: the thing you are trying to reach is found by meaning
-as readily as by spelling.
-
-### Wrap a selection
-
-Select a word, type `[` `[`, and the selection is wrapped, not replaced:
-`[[word]]`, selection preserved. The same holds for `(`, `` ` ``, `*`, `_` and
-`"`. This is `closeBrackets()` with bracket-wrapping enabled, and it is the
-smallest piece of work in this document.
+Three gestures, one idea: what you are reaching for is found by meaning as
+readily as by spelling.
 
 ### Link to a note, disambiguated by meaning
 
 Completion inside `[[…]]` today filters titles and paths with `includes()`
 (`ui/src/editor/completions.ts`). It becomes hybrid: substring for what the
 writer knows exactly, dense retrieval for what they can only paraphrase. Typing
-"carousel" offers the note "VAT fraud chain", flagged as a meaning match rather
-than a spelling match. A suggestion that is not letter-identical is the thing no
-other editor can offer.
-
-Ranking inside the popup is fusion plus memory's bounded priming — no rerank,
-because the popup answers keystrokes — so notes the writer reaches for surface
-first.
+"carousel" offers the note "VAT fraud chain", marked as a meaning match. Ranking
+is fusion plus memory's bounded priming — no rerank, because the popup answers
+keystrokes.
 
 ### Link to a passage
 
-This is Logseq's `((…))` capability without Logseq's opacity.
+This is Logseq's `((…))` capability, and the trade behind it should be stated
+rather than hidden: **in a folder of files, a stable, Obsidian-compatible link
+to a line requires writing an anchor into the target file.** Obsidian appends
+`^a1b2c3` to the line; Logseq writes `id:: <uuid>` under the block. This design
+does what Obsidian does, and accepts the same cost: one short token at the end
+of one line, only on lines that are actually linked to, and only when the link
+is made. What this design improves is not the mechanism but the picker.
 
 The writer selects their own words and presses the key. A picker searches
-**passages**, not notes, hybrid again. They choose the passage. On disk the
-result is Obsidian's own form:
+**passages**, not notes, hybrid and reranked. They choose one. On disk:
 
     [[Note#^a1b2c3|the words I selected]]
 
-and the anchor `^a1b2c3` is appended to the target line in the target file,
-exactly as Obsidian does it. The editor never shows an identifier: live preview
-renders the alias, and hovering shows the target passage.
-
-The writer gets Logseq's power, Obsidian's file format in both directions, and
-a picker better than either — because the index already holds every passage as
-an embedded unit. The unit of retrieval and the unit of reference become the
-same thing without any of it being visible.
-
-## Recall while writing
-
-A narrow band beside the text shows what the paragraph under the cursor pulls
-toward: three to five passages, each with its note name. Clicking opens it; one
-key turns it into a link at the cursor.
-
-Two rules decide whether this is kept or switched off:
-
-**The divider decides the quantity.** engram's cutoff applies: where relevance
-falls away, nothing is shown. The band is often empty, and that is the point. A
-band that always has something to say is noise; a band that usually says nothing
-is a signal.
-
-**The cadence belongs to the writer.** A slider with four positions: *live*
-(300 ms after typing stops), *on paragraph end*, *on keypress only*, and *off*.
-The default is *on paragraph end* — quiet is worth more than reaction speed
-while writing.
-
-The band uses fusion only; it does not rerank. Reranking is for deliberate
-search, where a second of latency is acceptable and a paragraph of typing is
-not.
-
-## Retrieval
-
-The pipeline, in order:
-
-1. Dense retrieval over passage vectors, cosine, top `k × multiplier`.
-2. Sparse retrieval, FTS5 BM25, top `k × multiplier`.
-3. Reciprocal rank fusion into one list.
-4. **Cross-encoder rerank** of the top `rerank_n` (default 20).
-5. The divider, drawn on the rerank score where reranking ran, on the fused
-   score otherwise.
-6. Memory's bounded priming (at most `prime_lift` places).
-7. Spread: at most `spread_max` associated notes that did not match.
-
-Steps 1–3 and 5–7 are as the first design describes them. Step 4 is new.
-
-**Where reranking runs:** deliberate search (the search pane, `Ctrl+K`) and the
-passage picker. **Where it does not:** the recall band, and completion inside
-`[[…]]`, both of which must stay under a typing rhythm.
-
-**Budget:** 500 ms end to end for a deliberate search. A cross-encoder over 20
-candidates on a modest CPU is the dominant cost and may exceed that; `rerank_n`
-is therefore a setting, and the measurement decides its default. If reranking
-cannot be made to fit, it degrades to fusion order with a note in the status
-bar — never to a hang.
-
-**Backend:** `fastembed`'s reranking support, behind a `Reranker` trait
-alongside `Embedder`, with a deterministic fake for tests. That fastembed-rs
-exposes the reranker models we want is an assumption to verify before this work
-starts.
+Live preview renders the alias; hovering shows the target passage; the
+identifier is never the thing on screen. Where the passage begins with a
+heading, the link is `[[Note#Heading]]` and nothing is written to the target.
 
 ## Passages
 
-Simpler than engram's, deliberately. A PKM vault holds many small documents, not
-few large ones, and a note's important part is at its beginning.
+Simpler than engram's, deliberately. A vault holds many small documents, and a
+note's important part is at its beginning.
 
-- Split on outline items, then headings, then paragraphs. An outline item
-  **together with its subtree** is one passage where it fits the budget, because
-  an item with its children is one thought. This also gives the passage picker
-  targets that a writer recognises.
-- Pack greedily up to the model's window. No overlap, no sliding windows, no
-  second pass.
-- **Truncate at the end** when a unit does not fit. Losing the tail of a long
-  passage is acceptable; the cost of being cleverer is not.
+- Split on list items, then headings, then paragraphs. A list item **with its
+  subtree** is one passage where it fits the budget: an item with its children
+  is one thought, and it is a target a writer recognises in the picker. This is
+  a parser rule and does not depend on the outliner.
+- Pack greedily up to the model's window. No overlap, no sliding windows.
+- **Truncate at the end** when a unit does not fit.
 - Prepend the heading and outline path so a passage carries its context.
-- No PDF, image or HTML ingestion. Attachments are listed and previewed, never
-  indexed. engram does capture; this does not.
+- No PDF, image or HTML ingestion. engram captures; this does not.
 
-## What ships in the binary
+## Retrieval
 
-The application must work on first launch with no network and no configuration.
-This is a release-pipeline requirement, not a packaging preference.
+1. Dense retrieval over passage vectors, cosine, top `k × multiplier`.
+2. Sparse retrieval, FTS5 BM25, top `k × multiplier`.
+3. Reciprocal rank fusion.
+4. **Cross-encoder rerank** of the top `rerank_n` (default 20).
+5. The divider, on the rerank score where reranking ran, on the fused score
+   otherwise.
+6. Memory's bounded priming (at most `prime_lift` places).
+7. Spread: at most `spread_max` associated notes that did not match.
 
-- The embedding model (`multilingual-e5-small` or better) and the reranker ship
-  **inside the release artifact**. No download, no model directory, no setup.
-- The AppImage grows accordingly. That is the accepted trade: size is cheap,
-  a first launch that cannot search is not.
-- `ENGRAM_NOTES_SLIM=1` remains the path for someone bringing their own model.
-- Nothing reaches the network in normal operation. A page in the repository
-  states exactly what does and when, and it says "nothing" for the default
-  build.
+Step 4 is new; the rest is the first design. Reranking runs for deliberate
+search (`Ctrl+K`, the search pane) and the passage picker. It does not run for
+the recall band or for `[[…]]` completion, which must keep a typing rhythm.
 
-## State, files and sync
+**Budget:** 500 ms end to end for a deliberate search. A cross-encoder over
+twenty candidates on a modest CPU is the dominant cost and may exceed it;
+`rerank_n` is a setting and measurement sets its default. If it cannot fit, it
+degrades to fusion order with a note in the status bar, never to a wait.
 
-A change from the first design, and the one point worth arguing about.
+**Backend:** `fastembed`'s reranking support behind a `Reranker` trait beside
+`Embedder`, with a deterministic fake for tests. That fastembed-rs exposes a
+multilingual reranker is an assumption to verify before this work starts.
 
-The first design puts everything derived in
-`data_dir/engram-notes/vaults/<hash>/index.db` and says it must not be synced.
-But `activation`, `assoc` and `events` are not derived: they cannot be rebuilt
-from the folder, they are the only irreplaceable thing the application makes,
-and under that rule a user who syncs a vault between two machines loses them.
+## Recall while writing
 
-So the state splits by replaceability, not by size:
+The Related pane of the first design becomes the recall band. Same place, one
+surface; the old pane's three groups fold into it.
 
-- `data_dir/engram-notes/vaults/<hash>/index.db` — **derived and rebuildable**:
-  notes, links, tags, properties, FTS, passages, vectors. Large. Never synced. A
-  schema bump deletes and rebuilds it.
-- `<vault>/.engram-notes/memory.db` — **learned and irreplaceable**: activation,
-  association, events, and outline view state (folds, zoom). Small. Travels with
-  the vault exactly as `.obsidian/` does. Migrated, never rebuilt.
+The band shows what the paragraph under the cursor pulls toward: up to five
+passages with their note names. Clicking opens; one key links at the cursor.
+Below the passages, the first design's *associated* group: notes that fired
+together with this one, with the query that bound them.
 
-Markdown files remain the truth for everything a note contains. The databases
-hold what a file cannot: what was used, what fired together, and what is folded.
-No note's content, structure or links live only in a database.
+**The divider decides the quantity.** Where relevance falls away, nothing is
+shown. The band is often empty, and that is the point: a band that always has
+something to say is noise.
+
+**The cadence belongs to the writer.** Four positions: *live* (300 ms after
+typing stops), *on paragraph end*, *on keypress only*, *off*. The default is
+*on paragraph end*.
+
+## Memory
+
+A change from the first design.
+
+The first design stores `activation`, `assoc` and `events` in the derived
+index, which lives in the OS data directory and must not be synced. But those
+tables are not derived — they are the one thing the application makes that the
+folder cannot rebuild — and under that rule a user who syncs a vault between
+two machines loses them. Moving a database into the vault does not help: a
+SQLite file written on every note open, synced by Syncthing or Dropbox, is a
+conflict waiting to happen.
+
+The resolution is to notice what the truth actually is. Activation is a sum of
+decayed bumps over open events. Association is built from pairs of events in
+one sitting or one search. Both are **derived from the event log**, so the
+event log is the truth of memory and everything else is a cache.
+
+- **`<vault>/.engram-notes/events/<install-id>.jsonl`** — append-only, one JSON
+  object per line: `{at, kind, path, query?}`. One file per installation, so
+  two machines never write the same file and any sync tool merges the folder
+  without conflict. The install id is generated once per machine and kept in
+  the OS data directory, not the vault.
+- A rename appends `{at, kind: "rename", from, to}`; replay follows it. The
+  log stays append-only and old events stay meaningful.
+- Sittings are not stored. They are derived at replay from the thirty-minute
+  gap.
+- **`activation` and `assoc` are tables in the derived index**, rebuilt from the
+  logs. The index remembers a byte offset per log file, so a normal open
+  replays only the tail; a schema bump replays everything. Replaying a year of
+  use is tens of thousands of lines and takes well under a second.
+- *Forget* deletes the log files. Since they are the truth, that is the whole
+  operation.
+
+Markdown files remain the truth for what a note contains; the event logs are
+the truth for how the vault was used; everything else is rebuildable. This is
+the first design's rule, applied to memory too.
 
 ## The graph
 
-Kept, demoted. A view that opens beside a note or fills a tab, with the semantic
-edges the first design describes. It is switchable off in settings, and nothing
-else depends on it. There is no global graph by default: at ten thousand notes a
-global force layout is a hairball in every tool that has one, and it opens
-deliberately, with filters.
+Kept, demoted. A view that opens beside a note or fills a tab, with the
+semantic edges the first design describes. Switchable off in settings. No
+global graph by default: at ten thousand notes a global force layout is a
+hairball in every tool that has one.
 
 ## Non-goals
 
 Everything the first design excludes, and additionally: no block-reference
-syntax of our own; no forced outline file format; no capture pipeline; no
-generative AI in any path the writer cannot avoid; no feature that removes,
-hides or proposes removing a note.
+syntax of our own; no forced outline file format; no zoom; no capture
+pipeline; no generative AI in any path the writer cannot avoid; no feature
+that removes, hides or proposes removing a note.
 
 ## Order of work
 
-Each step is useful on its own and ships on its own.
+Each step ships on its own.
 
-**0.2 — The writing surface.** `closeBrackets` with selection wrapping; the
-markdown keymap and list continuation; the outline gestures; folding; zoom; the
-`Tab` precedence rule.
+**0.2 — The editor's floor.** `closeBrackets` with selection wrapping; the
+markdown keymap and list continuation; the outline gestures; folding; `Tab`
+precedence.
 
-**0.3 — Linking.** Hybrid completion inside `[[…]]`; the passage picker; anchor
-writing into target files; alias rendering in live preview and reading mode.
+**0.3 — The Logseq importer.** The mapping above, the report, fixture graphs.
 
-**0.4 — Out of the box.** Embedder and reranker in the release artifact; the
-rerank stage and its trait; measurement of `rerank_n` against the 500 ms budget;
-the network-behaviour page.
+**0.4 — Linking.** Hybrid `[[…]]` completion; the passage picker; anchors;
+alias rendering in live preview and reading mode.
 
-**0.5 — The recall band.** The band, the cadence slider, divider-governed
-quantity, link-from-band.
+**0.5 — Out of the box.** Embedder and reranker in the release artifact; the
+rerank stage; the `rerank_n` measurement; the network-behaviour page.
 
-**0.6 and later.** Provenance and capture into the vault; Ask, citing and
-abstaining; the graph's remaining polish; card views for bases.
+**0.6 — The recall band and the event log.** The band replaces the Related
+pane; the cadence slider; the event log replaces the in-index events table,
+with a one-time migration of existing rows into a log.
 
-Running alongside, not as a phase: reproducible builds, signed releases,
-Flatpak and AUR packaging instead of curl-to-sh.
+**Later.** Provenance and capture into the vault; Ask, citing and abstaining;
+the graph's remaining polish; card views for bases.
+
+Alongside, not as a phase: reproducible builds, signed releases, Flatpak and
+AUR packaging.
 
 ## Testing
 
 In `core`, without a model or a window:
 
 - outline: indent and outdent carry the subtree; move preserves order; ordered
-  lists renumber; the produced markdown round-trips through the parser
-  unchanged in meaning.
-- linking: anchor generation is stable and unique per target line; alias form
-  parses; an anchor written into a target file changes nothing else about it.
-- passages: outline items pack with their subtrees; truncation happens at the
-  end; heading and outline paths are prepended.
-- retrieval: rerank changes order and the divider follows the rerank score;
-  priming stays bounded after reranking; the fake reranker is deterministic.
-- state: `memory.db` survives a schema bump of `index.db`; fold keys degrade
-  without corrupting anything.
+  lists renumber; the produced markdown parses to the same structure.
+- import: each mapping rule on a fixture; the report names every unmapped
+  construct; importing the importer's output changes nothing.
+- linking: anchors are stable and unique per target line; the alias form
+  parses; writing an anchor changes nothing else in the target file.
+- passages: list items pack with their subtrees; truncation is at the end;
+  heading and outline paths are prepended.
+- retrieval: rerank changes order and the divider follows it; priming stays
+  bounded after reranking; the fake reranker is deterministic.
+- memory: replaying a log reproduces activation and association exactly; a
+  rename event redirects earlier events; tail replay equals full replay; two
+  logs from two installs merge to one memory.
 
-In the frontend, with vitest: the wrap-selection behaviour, `Tab` precedence,
-the cadence slider's four states including *off*, and that the band renders
-nothing below the divider.
+In the frontend, with vitest: wrap-on-selection, `Tab` precedence, the cadence
+slider's four states including *off*, and that the band renders nothing below
+the divider.
 
 ## Risks, stated plainly
 
-**Fold state drifts.** Keying folds by outline path is fiddly and will
-occasionally be wrong after a large edit. Accepted: the failure mode is
-cosmetic and self-correcting.
+**Fold state drifts.** Keying folds by outline path will occasionally be wrong
+after a large edit. Accepted: the failure is cosmetic and self-correcting.
 
-**Reranking may not fit the budget.** A cross-encoder on CPU is the one part of
-this document whose cost is not yet known. The design degrades to fusion order
-rather than to waiting.
+**Reranking may not fit the budget.** The one cost in this document that is
+not yet known. The design degrades to fusion order rather than to waiting.
 
 **The band may be noise.** If the divider is tuned loosely, the band becomes
-another suggestion box and gets switched off. Tuning it tightly — three
-passages, often zero — is the design, not a fallback.
+another suggestion box and gets switched off. Tight is the design.
 
-**`Tab` is overloaded.** Three consumers, one key. The precedence rule above is
-the whole answer, and it needs to hold in every mode.
+**Import is lossy at the edges.** Block properties, priorities and scheduling
+have no Obsidian equivalent. The report is the answer: nothing is dropped
+without being named.
+
+**`Tab` is overloaded.** The precedence rule is the whole answer, and it needs
+to hold in every mode.
