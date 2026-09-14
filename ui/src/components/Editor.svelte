@@ -39,6 +39,7 @@
   // State, so effects that need the view run again once it exists.
   let view = $state.raw<EditorView>();
   const modeComp = new Compartment();
+  const indentComp = new Compartment();
   const forMode = (m: string) => (m === "live" ? livePreview({ onFollow, image }) : []);
   // An empty indent unit makes indentUnit throw, which would leave the pane blank.
   const indentSpaces = (n: number) => " ".repeat(Math.min(8, Math.max(1, Math.round(n) || 1)));
@@ -63,14 +64,16 @@
           editorTheme,
           markdownHighlight,
           EditorView.lineWrapping,
-          indentUnit.of(indentSpaces(indent)),
+          indentComp.of(indentUnit.of(indentSpaces(indent))),
           modeComp.of(forMode(mode)),
           completions(titles, tags),
           keymap.of([...closeBracketsKeymap, ...outlineKeymap, ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onchange(u.state.doc.toString());
             const folded = u.transactions.some((tr) => tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)));
-            if (folded && !u.transactions.some((tr) => tr.annotation(foldRestore))) onFolds(foldKeys(u.state));
+            if (!folded || u.transactions.some((tr) => tr.annotation(foldRestore))) return;
+            if (foldsOpen) onFolds(foldKeys(u.state));
+            else userFolded = true;
           }),
           EditorView.domEventHandlers({
             blur: () => {
@@ -96,27 +99,47 @@
     view?.dispatch({ effects: modeComp.reconfigure(forMode(mode)) });
   });
 
+  // The setting changes under an open pane, so Tab and Enter have to follow it.
+  $effect(() => {
+    view?.dispatch({ effects: indentComp.reconfigure(indentUnit.of(indentSpaces(indent))) });
+  });
+
   // Folds are applied once, when both the view and the keys exist. The tree has
   // to be parsed that far first or foldable() answers null, and on a long note
   // one budget is not enough, so a null tree waits for the background parse
-  // rather than folding half the keys.
+  // rather than folding half the keys. Until that has happened the pane does
+  // not write folds back: the saved set is not in the view yet, so writing what
+  // is would drop the rest of it. A user who folds during the wait has taken
+  // over, and their state is written instead of the stale one being restored.
   let foldsApplied = false;
+  let foldsOpen = false;
+  let userFolded = false;
   $effect(() => {
     const v = view;
     const keys = folds;
     if (!v || !keys || foldsApplied) return;
     foldsApplied = true;
-    if (keys.length) restoreFolds(v, keys, 0);
+    if (keys.length && !userFolded) restoreFolds(v, keys, 0);
+    else openFolds(v);
   });
+
+  function openFolds(v: EditorView) {
+    foldsOpen = true;
+    if (userFolded) onFolds(foldKeys(v.state));
+  }
 
   function restoreFolds(v: EditorView, keys: string[], tries: number) {
     if (!alive) return;
-    if (!ensureSyntaxTree(v.state, v.state.doc.length, 2000) && tries < 5) {
+    if (userFolded) return openFolds(v);
+    // A small budget per attempt: the whole parse of a long note in one call
+    // would hold the frame for as long as it takes.
+    if (!ensureSyntaxTree(v.state, v.state.doc.length, 200) && tries < 20) {
       setTimeout(() => restoreFolds(v, keys, tries + 1), 100);
       return;
     }
     const tr = foldTransaction(v.state, keys);
     if (tr) v.dispatch(tr);
+    openFolds(v);
   }
 
   // Another pane's typing or an outside reload changed the note. Only the

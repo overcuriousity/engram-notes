@@ -109,6 +109,16 @@ describe("folding", () => {
     expect(foldKeys(s.update({ effects: foldEffect.of(range) }).state)).toEqual(["h2"]);
   });
 
+  it("does not let a bullet inside a fenced code block shift the list keys", () => {
+    const key = (doc: string, line: number) => {
+      const s = stateOf(doc, 0);
+      const range = foldable(s, s.doc.line(line).from, s.doc.line(line).to)!;
+      return foldKeys(s.update({ effects: foldEffect.of(range) }).state);
+    };
+    expect(key("```sh\necho hi\n```\n\n- real\n  - child\n", 5)).toEqual(["0:0"]);
+    expect(key("```sh\n- x\n```\n\n- real\n  - child\n", 5)).toEqual(["0:0"]);
+  });
+
   it("marks a restore, so the fold it applies is not read back as the user's", () => {
     const s = stateOf("- a\n  - b\n- c", 0);
     const tr = s.update(foldTransaction(s, ["0:0"])!);

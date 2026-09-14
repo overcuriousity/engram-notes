@@ -134,23 +134,35 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 // written back as gone.
 export const foldRestore = Annotation.define<boolean>();
 
-// Every line that can carry a fold key: a list item keyed by its outline path,
-// a heading by its ordinal. Both survive the edits that leave the structure
-// alone, which is all that is asked. A fence's contents are skipped, so a `#`
-// in a code block does not shift every heading key below it.
-function lineKeys(lines: string[]): Map<number, string> {
-  const keys = O.outlinePaths(lines);
+// A fence's contents are not outline text: a `#` or a `- ` inside a code block
+// would otherwise key as a heading, or open a list block of its own and shift
+// every key below it. Each fenced line becomes a plain line at the fence's own
+// indent, so a fence inside a list item still does not break the list.
+function withoutFences(lines: string[]): string[] {
+  const out = lines.slice();
   let fence: string | null = null;
-  let h = 0;
+  let filler = "";
   for (let n = 0; n < lines.length; n++) {
     const m = FENCE.exec(lines[n]);
     if (fence !== null) {
       if (m && m[1][0] === fence[0] && m[1].length >= fence.length && lines[n].slice(m[0].length).trim() === "") fence = null;
-      continue;
-    }
-    if (m) fence = m[1];
-    else if (!keys.has(n) && HEADING.test(lines[n])) keys.set(n, `h${++h}`);
+    } else if (m) {
+      fence = m[1];
+      filler = " ".repeat(O.indentOf(lines[n])) + ".";
+    } else continue;
+    out[n] = filler;
   }
+  return out;
+}
+
+// Every line that can carry a fold key: a list item keyed by its outline path,
+// a heading by its ordinal. Both survive the edits that leave the structure
+// alone, which is all that is asked.
+function lineKeys(lines: string[]): Map<number, string> {
+  const bare = withoutFences(lines);
+  const keys = O.outlinePaths(bare);
+  let h = 0;
+  for (let n = 0; n < bare.length; n++) if (!keys.has(n) && HEADING.test(bare[n])) keys.set(n, `h${++h}`);
   return keys;
 }
 
