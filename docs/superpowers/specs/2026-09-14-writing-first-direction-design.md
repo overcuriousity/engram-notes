@@ -2,7 +2,7 @@
 
 Written 2026-09-14, revised the same day after review. This amends the design
 of 2026-09-12, which stands except where this says otherwise. It settles what
-engram-notes is for, and therefore what the next five releases build.
+engram-notes is for, and therefore what the next eight releases build.
 
 ## Why
 
@@ -54,6 +54,10 @@ writing, or it is a view you can close.
   with a cadence the writer sets. One surface, not two.
 - **Memory's truth is an event log in the vault.** Activation and association
   are derived from it, like every other index.
+- **The vault can say what it knows.** Search verdicts tune the search; a
+  base can filter by meaning; topics that recur without a note of their own
+  are offered one. Three things that follow from having every passage as a
+  vector and every search as an event, and that no plugin stack has.
 - **Forgetting is not a feature.** Activation and association are ranking and
   layout signals only. Nothing is hidden, pruned or proposed for deletion; the
   vault is also an instrument of investigation and documentation.
@@ -259,6 +263,81 @@ Markdown files remain the truth for what a note contains; the event logs are
 the truth for how the vault was used; everything else is rebuildable. This is
 the first design's rule, applied to memory too.
 
+## What the vault can tell you
+
+Three features that exist because every passage is a vector and every search
+is an event. Each is a view or a setting the writer opens; none interrupts
+writing.
+
+### Search that tunes itself
+
+engram's core idea, translated. A test query written while looking at the
+answer passes on every system; the only honest measure is the searches made in
+earnest.
+
+- **A verdict is an event.** Opening a result from a search is a positive
+  verdict at that rank, appended to the event log as
+  `{at, kind: "verdict", query, path, rank}`. Not opening anything is no
+  verdict, not a negative one. A small explicit *yes / no* under the search
+  results adds the verdicts clicks alone are too thin to give.
+- **Two numbers**, recall@10 and MRR over the last 200 verdicts or 90 days,
+  whichever is smaller, shown in settings under *Search quality*.
+- **Tuning is proposed, never applied silently.** An idle-time run replays the
+  verdict queries against a small grid of settings — the RRF constant, the
+  dense/sparse weight, the divider fraction, `rerank_n`, `prime_lift` — and
+  when one improves MRR by a margin over enough verdicts, it appears in
+  settings as a proposal with one button. A search that quietly changes its
+  behaviour is unsettling; a search that says "this would have been better"
+  is engram.
+- Vectors drift as the model or the notes change, so old verdicts go stale.
+  The window is the answer, and a model change clears them.
+
+### Bases that filter by meaning
+
+Two functions added to the Bases expression language, documented as ours in
+`docs/bases.md`, not as Obsidian's:
+
+- `similarity("text")` — a number: the note's similarity to the text, taken as
+  the note's **best passage**, not its mean. A mean lets a long thin note beat
+  a short exact one.
+- `similar("text")` — a boolean: true above the divider for that text. An
+  optional second argument sets a fixed threshold instead.
+
+Everything else is Bases as it stands: `similar("shell companies") and
+file.hasTag("case-42")`, sorted by `similarity(...)`, with a column showing
+the score. Meaning and structure in one filter is the point; it takes two
+tools anywhere else.
+
+The query embedding is computed once per open and again when the `.base`
+changes; note scores recompute when vectors change, through the watcher. Dense
+only: no BM25 and no rerank, since a view may match hundreds of notes and
+reranking them would take seconds. A `.base` using these functions is valid
+YAML in Obsidian, which reports an unknown expression for that view.
+
+### Topics without a home
+
+Entity-agnostic by construction: it looks for recurrence in meaning, not for
+names, so a person, a company, a procedure and a concept are found the same
+way.
+
+1. **Cluster passages** agglomeratively over cosine similarity with a fixed
+   density threshold — no target count. Runs when the index is idle, never
+   while typing.
+2. **Check coverage.** For each cluster drawing on at least three notes: is
+   there a note whose title-and-lead embedding lies near the centroid? If so
+   the topic has a home. If not, it is a finding.
+3. **Name it without patterns.** The terms over-represented in the cluster
+   against the rest of the vault (TF-IDF, cluster versus vault) that occur in
+   at least half its passages. A proposed title, edited by a person.
+4. **One click** creates the note with that title, pre-filled with links to
+   every participating passage — `[[Note#^id]]` or `[[Note#Heading]]`. A hub
+   page made of meaning, not an empty placeholder.
+
+Cluster quality depends on the model and term labels are sometimes nonsense.
+The guards are the density threshold, the three-note minimum, and that
+nothing is created without a click. It is an offer in a view, never a prompt
+that appears.
+
 ## The graph
 
 Kept, demoted. A view that opens beside a note or fills a tab, with the
@@ -293,6 +372,15 @@ rerank stage; the `rerank_n` measurement; the network-behaviour page.
 pane; the cadence slider; the event log replaces the in-index events table,
 with a one-time migration of existing rows into a log.
 
+**0.7 — Verdicts.** The verdict event, the explicit control, *Search quality*
+in settings, the idle-time grid and its proposal.
+
+**0.8 — Bases that filter by meaning.** `similarity()` and `similar()`, the
+score column, `docs/bases.md`.
+
+**0.9 — Topics without a home.** Clustering, coverage, naming, the view and
+its one click. Last because its thresholds need iteration on real vaults.
+
 **Later.** Provenance and capture into the vault; Ask, citing and abstaining;
 the graph's remaining polish; card views for bases.
 
@@ -316,6 +404,13 @@ In `core`, without a model or a window:
 - memory: replaying a log reproduces activation and association exactly; a
   rename event redirects earlier events; tail replay equals full replay; two
   logs from two installs merge to one memory.
+- verdicts: recall@10 and MRR from a fixed verdict set; the grid proposes only
+  above the margin; a model change clears the window.
+- bases: `similarity()` takes the best passage; `similar()` follows the
+  divider and honours a fixed threshold; both compose with `and` and `or`.
+- topics: clustering is deterministic under the fake embedder; a covered
+  cluster is not offered; a cluster under three notes is not offered; the
+  label draws only from terms in at least half the passages.
 
 In the frontend, with vitest: wrap-on-selection, `Tab` precedence, the cadence
 slider's four states including *off*, and that the band renders nothing below
@@ -338,3 +433,11 @@ without being named.
 
 **`Tab` is overloaded.** The precedence rule is the whole answer, and it needs
 to hold in every mode.
+
+**Topic labels may be nonsense.** Term statistics name a cluster well when it
+is tight and badly when it is not. The density threshold does most of the
+work, and the person does the rest; a bad label costs one edit.
+
+**Verdicts are sparse.** A single user produces few searches a day, and most
+searches end without a click. The proposal margin and the minimum count exist
+so that a handful of verdicts never moves a setting.
