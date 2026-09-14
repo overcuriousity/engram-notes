@@ -1,0 +1,52 @@
+{
+  "root": "/vault",
+  "config": {
+    "editor": {
+      "default_mode": "live",
+      "indent": 2
+    },
+    "daily_notes": {
+      "folder": "Daily",
+      "template": null,
+      "format": "%Y-%m-%d"
+    },
+    "hotkeys": {},
+    "theme": "light",
+    "search": {
+      "limit": 20,
+      "semantic": true,
+      "similarity_floor": 0.83
+    },
+    "memory": {
+      "enabled": true
+    },
+    "embed": {
+      "model_dir": null
+    }
+  },
+  "files": [
+    {
+      "path": "Outline.md",
+      "text": "# Plan\n\n- Interview the treasurer\n  - Ask about the March statement\n  - Ask who signed\n- Pull the registry filings\n  - [ ] 2024\n  - [x] 2025\n\n1. Draft\n2. Review\n3. File\n\nA paragraph that is not a list, and long enough to wrap onto a second line so that its gutter stays empty.\n"
+    }
+  ],
+  "folds": {
+    "Outline.md": [
+      "0:1"
+    ]
+  },
+  "workspace": {
+    "layout": {
+      "kind": "pane",
+      "id": 1,
+      "tabs": [
+        {
+          "path": "Outline.md",
+          "mode": "live"
+        }
+      ],
+      "active": 0
+    },
+    "activePane": 1
+  }
+}

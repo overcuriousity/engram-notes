@@ -64,3 +64,15 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
 47. The graph's nodes are small and pale and show no labels until zoomed out
     past the point where they fit.
 48. `cargo test --workspace` and `pnpm check && pnpm test` pass.
+49. Select a word and type `[[`: it becomes `[[word]]` with the word still
+    selected; `*`, `` ` ``, `(` and `"` wrap the same way.
+50. Enter at the end of a list item continues the list; Enter on an empty
+    nested item outdents it; on an empty top-level item it removes the bullet.
+51. Tab and Shift+Tab on an item with children move the whole subtree;
+    Alt+Up/Down swap it with its sibling, and an ordered list stays in
+    sequence afterwards.
+52. Hover an item with children: a chevron appears in the gutter; click it to
+    fold; close and reopen the note and it is still folded; rename the note
+    and it stays folded.
+53. With the `[[` popup open, Tab accepts the completion; Tab in prose inserts
+    the indent width from settings.

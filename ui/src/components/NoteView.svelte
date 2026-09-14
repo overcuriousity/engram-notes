@@ -4,7 +4,7 @@
   import { resolveFile } from "../lib/files";
   import { app } from "../lib/state.svelte";
   import { findPane } from "../lib/layout";
-  import { resolveLink, createNote, anchorLine, tags as apiTags, typing, errorMessage } from "../lib/api";
+  import { resolveLink, createNote, anchorLine, tags as apiTags, typing, errorMessage, getFolds, setFolds } from "../lib/api";
   import Editor from "./Editor.svelte";
   import Reading from "./Reading.svelte";
   import PropertiesBlock from "./PropertiesBlock.svelte";
@@ -23,8 +23,20 @@
   const jumped = () => (app.jump = null);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let tagList = $state<string[]>([]);
+  let folds = $state<string[] | null>(null);
+  let foldTimer: ReturnType<typeof setTimeout> | undefined;
+  // Folding is frequent and cosmetic; one write per pause is enough.
+  function onFolds(keys: string[]) {
+    clearTimeout(foldTimer);
+    foldTimer = setTimeout(() => void setFolds(path, keys).catch(() => {}), 500);
+  }
   onMount(async () => {
     tagList = (await apiTags()).map((t) => t.tag);
+    try {
+      folds = (await getFolds(path)) ?? [];
+    } catch {
+      folds = [];
+    }
   });
 
   // A second pane's editor echoes the change it was given; equal text is not an edit.
@@ -95,6 +107,8 @@
         tags={() => tagList}
         {image}
         indent={app.config?.editor.indent ?? 2}
+        {folds}
+        {onFolds}
       />
     {/if}
   </div>

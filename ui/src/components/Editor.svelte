@@ -8,11 +8,11 @@
   import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown";
   import { yamlFrontmatter } from "@codemirror/lang-yaml";
   import { languages } from "@codemirror/language-data";
-  import { indentUnit } from "@codemirror/language";
+  import { ensureSyntaxTree, foldEffect, indentUnit, unfoldEffect } from "@codemirror/language";
   import { editorTheme, markdownHighlight } from "../editor/theme";
   import { livePreview } from "../editor/livePreview";
   import { completions } from "../editor/completions";
-  import { listOnlyFolding, markdownBrackets, outlineFolding, outlineKeymap } from "../editor/outline";
+  import { foldKeys, foldTransaction, listOnlyFolding, markdownBrackets, outlineFolding, outlineKeymap } from "../editor/outline";
   import { textDiff } from "../lib/textdiff";
 
   interface Props {
@@ -30,8 +30,11 @@
     tags: () => string[];
     image: (target: string) => string | null;
     indent: number;
+    // Fold keys from the index, or null while they load; and where to send changes.
+    folds: string[] | null;
+    onFolds: (keys: string[]) => void;
   }
-  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, titles, tags, image, indent }: Props = $props();
+  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, titles, tags, image, indent, folds, onFolds }: Props = $props();
   let host: HTMLDivElement;
   // State, so effects that need the view run again once it exists.
   let view = $state.raw<EditorView>();
@@ -63,6 +66,9 @@
           keymap.of([...closeBracketsKeymap, ...outlineKeymap, ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onchange(u.state.doc.toString());
+            if (u.transactions.some((tr) => tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)))) {
+              onFolds(foldKeys(u.state));
+            }
           }),
           EditorView.domEventHandlers({
             blur: () => {
@@ -83,6 +89,20 @@
 
   $effect(() => {
     view?.dispatch({ effects: modeComp.reconfigure(forMode(mode)) });
+  });
+
+  // Folds are applied once, when both the view and the keys exist. The tree
+  // has to be parsed that far first or foldable() answers null.
+  let foldsApplied = false;
+  $effect(() => {
+    const v = view;
+    const keys = folds;
+    if (!v || !keys || foldsApplied) return;
+    foldsApplied = true;
+    if (!keys.length) return;
+    ensureSyntaxTree(v.state, v.state.doc.length, 2000);
+    const tr = foldTransaction(v.state, keys);
+    if (tr) v.dispatch(tr);
   });
 
   // Another pane's typing or an outside reload changed the note. Only the
