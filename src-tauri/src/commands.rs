@@ -4,6 +4,7 @@ use crate::state::{AppState, Open};
 use engram_core::bases::{SortKey, Table};
 use engram_core::config::{self, AppConfig, Snippet};
 use engram_core::graph::{Graph, SemanticEdge};
+use engram_core::import::logseq::{self as logseq_import, Summary as ImportSummary};
 use engram_core::index::query::{LinkRow, PropertyCount, TagCount, Unresolved};
 use engram_core::index::{Index, RebuildStats};
 use engram_core::memory::{EventKind, related::Related};
@@ -577,6 +578,35 @@ pub fn snippets(state: State<AppState>) -> CmdResult<Vec<Snippet>> {
     with_open(&state, |o| Ok(config::snippets(&o.vault)?))
 }
 
+/// `dir` is an absolute folder from the dialog; it has to be inside the vault.
+fn inside_vault(vault: &Vault, dir: &str) -> CmdResult<String> {
+    let abs = std::path::Path::new(dir)
+        .canonicalize()
+        .map_err(|_| CommandError {
+            code: "not_found",
+            message: format!("{dir}: no such folder"),
+        })?;
+    let rel = abs.strip_prefix(vault.root()).map_err(|_| CommandError {
+        code: "config",
+        message: "the destination must be a folder inside the vault".into(),
+    })?;
+    Ok(rel.to_string_lossy().replace('\\', "/"))
+}
+
+#[tauri::command]
+pub fn import_logseq(
+    state: State<AppState>,
+    source: String,
+    dest: String,
+) -> CmdResult<ImportSummary> {
+    with_open(&state, |o| {
+        let rel = inside_vault(&o.vault, &dest)?;
+        let summary = logseq_import::run(&o.vault, &o.config, std::path::Path::new(&source), &rel)?;
+        o.index.rebuild(&o.vault)?;
+        Ok(summary)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -751,5 +781,34 @@ mod tests {
         let kind: engram_core::memory::EventKind =
             serde_json::from_str("\"open_from_search\"").unwrap();
         assert_eq!(kind, engram_core::memory::EventKind::OpenFromSearch);
+    }
+
+    #[test]
+    fn import_summary() {
+        let s = ImportSummary {
+            pages: 2,
+            journals: 1,
+            assets: 0,
+            skipped: 0,
+            unmapped: 3,
+            report: "import-report.md".into(),
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["report"], "import-report.md");
+        assert_eq!(v["unmapped"], 3);
+    }
+
+    #[test]
+    fn destination_outside_the_vault_is_refused() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("v");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        let v = Vault::open(&root).unwrap();
+        assert!(inside_vault(&v, d.path().to_str().unwrap()).is_err());
+        assert_eq!(inside_vault(&v, root.to_str().unwrap()).unwrap(), "");
+        assert_eq!(
+            inside_vault(&v, root.join("sub").to_str().unwrap()).unwrap(),
+            "sub"
+        );
     }
 }

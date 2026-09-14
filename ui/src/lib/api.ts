@@ -90,6 +90,8 @@ export const dailyNote = () => invoke<string>("daily_note");
 export const templates = () => invoke<string[]>("templates");
 export const renderTemplate = (path: string, into: string) => invoke<string>("render_template", { path, into });
 export const snippets = () => invoke<Snippet[]>("snippets");
+export interface ImportSummary { pages: number; journals: number; assets: number; skipped: number; unmapped: number; report: string }
+export const importLogseq = (source: string, dest: string) => invoke<ImportSummary>("import_logseq", { source, dest });
 export const rescan = () => invoke<RebuildStats>("rescan");
 export const attachmentPath = (path: string) => invoke<string>("attachment_path", { path });
 export const openExternal = (path: string) => invoke<void>("open_external", { path });
