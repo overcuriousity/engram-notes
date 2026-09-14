@@ -3,7 +3,7 @@ import { EditorState, type Transaction } from "@codemirror/state";
 import { ensureSyntaxTree, indentUnit, codeFolding, foldable, foldEffect } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { closeBrackets, insertBracket } from "@codemirror/autocomplete";
-import { enterInList, foldKeys, foldTransaction, indentItem, listOnlyFolding, markdownBrackets, markdownEnter, moveItemDown, moveItemUp, outdentItem } from "./outline";
+import { enterInList, foldKeys, foldRestore, foldTransaction, indentItem, listOnlyFolding, markdownBrackets, markdownEnter, moveItemDown, moveItemUp, outdentItem } from "./outline";
 
 function stateOf(doc: string, cursor: number | { anchor: number; head: number }, indent = 2) {
   const state = EditorState.create({
@@ -101,5 +101,17 @@ describe("folding", () => {
     const restored = s.update(foldTransaction(s, ["0:1", "h1"])!).state;
     expect(foldKeys(restored)).toEqual(["0:1", "h1"]);
     expect(foldTransaction(s, ["9:9"])).toBeNull();
+  });
+
+  it("does not count a hash inside a fenced code block as a heading", () => {
+    const s = stateOf("# One\n\n```sh\n# not a heading\n```\n\n# Two\ntext", 0);
+    const range = foldable(s, s.doc.line(7).from, s.doc.line(7).to)!;
+    expect(foldKeys(s.update({ effects: foldEffect.of(range) }).state)).toEqual(["h2"]);
+  });
+
+  it("marks a restore, so the fold it applies is not read back as the user's", () => {
+    const s = stateOf("- a\n  - b\n- c", 0);
+    const tr = s.update(foldTransaction(s, ["0:0"])!);
+    expect(tr.annotation(foldRestore)).toBe(true);
   });
 });

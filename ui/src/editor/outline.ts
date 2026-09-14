@@ -1,4 +1,4 @@
-import { EditorSelection, type EditorState, type Extension, type StateCommand, type TransactionSpec } from "@codemirror/state";
+import { Annotation, EditorSelection, type EditorState, type Extension, type StateCommand, type TransactionSpec } from "@codemirror/state";
 import type { KeyBinding } from "@codemirror/view";
 import { indentLess, indentMore } from "@codemirror/commands";
 import { acceptCompletion } from "@codemirror/autocomplete";
@@ -127,40 +127,51 @@ export function outlineFolding(): Extension {
 }
 
 const HEADING = /^#{1,6}\s/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
-// A list item's key is its outline path; a heading's is its ordinal. Both
-// survive the edits that leave the structure alone, which is all that is asked.
-function keyOfLine(lines: string[], paths: Map<number, string>, n: number): string | null {
-  const p = paths.get(n);
-  if (p) return p;
-  if (!HEADING.test(lines[n])) return null;
+// Marks a restore, so the update listener can tell it from the user folding
+// something: a key that did not resolve stays in the index rather than being
+// written back as gone.
+export const foldRestore = Annotation.define<boolean>();
+
+// Every line that can carry a fold key: a list item keyed by its outline path,
+// a heading by its ordinal. Both survive the edits that leave the structure
+// alone, which is all that is asked. A fence's contents are skipped, so a `#`
+// in a code block does not shift every heading key below it.
+function lineKeys(lines: string[]): Map<number, string> {
+  const keys = O.outlinePaths(lines);
+  let fence: string | null = null;
   let h = 0;
-  for (let i = 0; i <= n; i++) if (HEADING.test(lines[i])) h++;
-  return `h${h}`;
+  for (let n = 0; n < lines.length; n++) {
+    const m = FENCE.exec(lines[n]);
+    if (fence !== null) {
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length && lines[n].slice(m[0].length).trim() === "") fence = null;
+      continue;
+    }
+    if (m) fence = m[1];
+    else if (!keys.has(n) && HEADING.test(lines[n])) keys.set(n, `h${++h}`);
+  }
+  return keys;
 }
 
 export function foldKeys(state: EditorState): string[] {
-  const lines = lineArray(state);
-  const paths = O.outlinePaths(lines);
-  const keys: string[] = [];
+  const keys = lineKeys(lineArray(state));
+  const out: string[] = [];
   foldedRanges(state).between(0, state.doc.length, (from) => {
-    const k = keyOfLine(lines, paths, state.doc.lineAt(from).number - 1);
-    if (k) keys.push(k);
+    const k = keys.get(state.doc.lineAt(from).number - 1);
+    if (k) out.push(k);
   });
-  return keys;
+  return out;
 }
 
 export function foldTransaction(state: EditorState, keys: string[]): TransactionSpec | null {
   const want = new Set(keys);
-  const lines = lineArray(state);
-  const paths = O.outlinePaths(lines);
   const effects = [];
-  for (let n = 0; n < lines.length; n++) {
-    const k = keyOfLine(lines, paths, n);
-    if (!k || !want.has(k)) continue;
+  for (const [n, k] of lineKeys(lineArray(state))) {
+    if (!want.has(k)) continue;
     const l = state.doc.line(n + 1);
     const r = foldable(state, l.from, l.to);
     if (r) effects.push(foldEffect.of(r));
   }
-  return effects.length ? { effects } : null;
+  return effects.length ? { effects, annotations: foldRestore.of(true) } : null;
 }
