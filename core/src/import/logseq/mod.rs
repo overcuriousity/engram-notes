@@ -6,9 +6,12 @@ pub mod page;
 
 use crate::config::{self, AppConfig};
 use crate::import::Report;
+use crate::vault::Vault;
+use crate::{Error, Result};
 use inline::Refs;
 use page::{Line, Page};
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
@@ -293,10 +296,102 @@ pub fn map_graph(files: &[SourceFile], opts: &Options) -> Output {
     out
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize)]
+pub struct Summary {
+    pub pages: usize,
+    pub journals: usize,
+    pub assets: usize,
+    /// Files left alone because the vault already had them.
+    pub skipped: usize,
+    pub unmapped: usize,
+    /// Vault path of the report.
+    pub report: String,
+}
+
+/// Reads the graph, writes what maps into the vault without overwriting
+/// anything, copies `assets/`, and writes the report. The graph is only read.
+pub fn run(vault: &Vault, cfg: &AppConfig, graph: &Path, dest: &str) -> Result<Summary> {
+    if !graph.join("pages").is_dir() && !graph.join("journals").is_dir() {
+        return Err(Error::NotFound(format!(
+            "{}: not a Logseq graph (no pages/ or journals/)",
+            graph.display()
+        )));
+    }
+    let mut files = Vec::new();
+    let mut assets = Vec::new();
+    let walker = walkdir::WalkDir::new(graph).into_iter().filter_entry(|e| {
+        let name = e.file_name().to_string_lossy();
+        e.depth() == 0
+            || (!name.starts_with('.') && !(e.depth() == 1 && IGNORED.contains(&name.as_ref())))
+    });
+    for entry in walker {
+        let entry = entry.map_err(|e| Error::io(graph, e.into()))?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let rel = entry
+            .path()
+            .strip_prefix(graph)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        if rel.starts_with("assets/") {
+            assets.push((entry.path().to_path_buf(), rel));
+        } else {
+            // A file that is not text is not a note; it is reported as not imported.
+            let text = std::fs::read_to_string(entry.path()).unwrap_or_default();
+            files.push(SourceFile { path: rel, text });
+        }
+    }
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    let mut out = map_graph(&files, &Options { dest, config: cfg });
+    let mut s = Summary {
+        report: join(dest, "import-report.md"),
+        ..Default::default()
+    };
+    for m in &out.pages {
+        match vault.create(&m.path, &m.text) {
+            Ok(()) if m.journal => s.journals += 1,
+            Ok(()) => s.pages += 1,
+            Err(Error::Exists(_)) => {
+                s.skipped += 1;
+                out.report
+                    .note(&m.path, 0, "already in the vault, not written");
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    for (src, rel) in assets {
+        let dst = vault.abs(&join(dest, &rel));
+        if dst.exists() {
+            s.skipped += 1;
+            out.report
+                .note(&rel, 0, "already in the vault, not written");
+            continue;
+        }
+        if let Some(dir) = dst.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| Error::io(dir, e))?;
+        }
+        std::fs::copy(&src, &dst).map_err(|e| Error::io(&dst, e))?;
+        s.assets += 1;
+    }
+    s.unmapped = out.report.entries.len();
+    let summary = format!(
+        "Imported {} pages, {} journals and {} assets from `{}` on {}. {} files were already in the vault and were left alone.",
+        s.pages,
+        s.journals,
+        s.assets,
+        graph.display(),
+        chrono::Local::now().date_naive(),
+        s.skipped
+    );
+    vault.write(&s.report, &out.report.render(&summary))?;
+    Ok(s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     fn read_dir(root: &Path) -> Vec<SourceFile> {
         let mut out = Vec::new();
@@ -459,5 +554,42 @@ mod tests {
         );
         assert_eq!(out.pages[0].path, "My Page.md");
         assert_eq!(out.pages[0].text, "\n- x\n");
+    }
+
+    #[test]
+    fn run_writes_pages_assets_and_report_and_never_overwrites() {
+        let graph = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/logseq");
+        let d = tempfile::tempdir().unwrap();
+        let vault = Vault::open(d.path()).unwrap();
+        vault.create("notes.md", "mine").unwrap();
+        let cfg = AppConfig::default();
+        let s = run(&vault, &cfg, &graph, "In/").unwrap();
+        assert_eq!((s.pages, s.journals, s.assets, s.skipped), (6, 2, 1, 0));
+        assert_eq!(s.report, "In/import-report.md");
+        assert!(d.path().join("In/Project/Alpha.md").is_file());
+        assert!(d.path().join("Daily/2026-09-14.md").is_file());
+        assert!(d.path().join("In/journals/notadate.md").is_file());
+        assert!(d.path().join("In/assets/diagram.png").is_file());
+        assert_eq!(vault.read("notes.md").unwrap(), "mine");
+        let report = vault.read("In/import-report.md").unwrap();
+        assert!(report.contains("### `whiteboards/board.edn`"), "{report}");
+        assert!(!report.contains("logseq/config.edn"), "{report}");
+        // Running again writes nothing and says why.
+        let s = run(&vault, &cfg, &graph, "In/").unwrap();
+        assert_eq!((s.pages, s.journals, s.assets), (0, 0, 0));
+        assert_eq!(s.skipped, 9);
+        let report = vault.read("In/import-report.md").unwrap();
+        assert!(
+            report.contains("already in the vault, not written"),
+            "{report}"
+        );
+    }
+
+    #[test]
+    fn run_refuses_a_folder_that_is_not_a_graph() {
+        let d = tempfile::tempdir().unwrap();
+        let vault = Vault::open(d.path()).unwrap();
+        let err = run(&vault, &AppConfig::default(), d.path(), "").unwrap_err();
+        assert!(err.to_string().contains("not a Logseq graph"), "{err}");
     }
 }
