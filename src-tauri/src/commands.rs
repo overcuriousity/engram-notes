@@ -593,6 +593,24 @@ fn inside_vault(vault: &Vault, dir: &str) -> CmdResult<String> {
     Ok(rel.to_string_lossy().replace('\\', "/"))
 }
 
+/// `dir` is the graph from the dialog; the importer reads it as it is on
+/// disk, so it can be neither the vault nor a part of it nor its parent.
+fn outside_vault(vault: &Vault, dir: &str) -> CmdResult<std::path::PathBuf> {
+    let abs = std::path::Path::new(dir)
+        .canonicalize()
+        .map_err(|_| CommandError {
+            code: "not_found",
+            message: format!("{dir}: no such folder"),
+        })?;
+    if abs.starts_with(vault.root()) || vault.root().starts_with(&abs) {
+        return Err(CommandError {
+            code: "config",
+            message: "the graph must be a folder outside the vault".into(),
+        });
+    }
+    Ok(abs)
+}
+
 #[tauri::command]
 pub fn import_logseq(
     state: State<AppState>,
@@ -601,9 +619,10 @@ pub fn import_logseq(
 ) -> CmdResult<ImportSummary> {
     with_open(&state, |o| {
         let rel = inside_vault(&o.vault, &dest)?;
+        let graph = outside_vault(&o.vault, &source)?;
         // An import that failed still wrote pages, and they are only findable
         // once the index has seen them.
-        let out = logseq_import::run(&o.vault, &o.config, std::path::Path::new(&source), &rel);
+        let out = logseq_import::run(&o.vault, &o.config, &graph, &rel);
         let rebuilt = o.index.rebuild(&o.vault);
         let summary = out?;
         rebuilt?;
@@ -698,6 +717,24 @@ mod tests {
             serde_json::to_value(&row).unwrap(),
             json!({"src_path": "a.md", "target_raw": "B", "target_path": null, "kind": "wiki",
                    "heading": null, "block": "x", "alias": null, "line": 3, "context": "c"})
+        );
+    }
+
+    #[test]
+    fn a_graph_inside_the_vault_is_refused() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("In/pages")).unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let inside = d.path().join("In").to_string_lossy().into_owned();
+        let err = outside_vault(&v, &inside).unwrap_err();
+        assert_eq!(err.code, "config");
+        let root = d.path().to_string_lossy().into_owned();
+        assert_eq!(outside_vault(&v, &root).unwrap_err().code, "config");
+        let outer = tempfile::tempdir().unwrap();
+        assert!(outside_vault(&v, &outer.path().to_string_lossy()).is_ok());
+        assert_eq!(
+            outside_vault(&v, "/no/such/folder").unwrap_err().code,
+            "not_found"
         );
     }
 

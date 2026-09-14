@@ -193,6 +193,20 @@ fn anchor_for(uuid: &str, used: &mut HashSet<String>) -> String {
     flat
 }
 
+/// The lines a block will render, `id::` and `collapsed::` already dropped.
+fn block_lines(b: &page::Block) -> Vec<String> {
+    let mut lines = vec![b.head.clone()];
+    lines.extend(
+        b.body
+            .iter()
+            .filter(
+                |l| !matches!(l, Line::Property { key, .. } if key == "id" || key == "collapsed"),
+            )
+            .map(page::block_line),
+    );
+    lines
+}
+
 fn stem(path: &str) -> &str {
     let name = path.rsplit('/').next().unwrap_or(path);
     strip_md(name).unwrap_or(name)
@@ -217,6 +231,25 @@ fn collect_ids(planned: &mut [Planned], refs: &mut Refs, report: &mut Report) {
         } else {
             stem.to_owned()
         };
+        // Logseq keys every page by an `id::` of its own; in the vault the
+        // page's name is that key, so a reference to it is a page link.
+        if let Some(i) = p.properties.iter().position(|(k, _)| k == "id") {
+            let (_, uuid) = p.properties.remove(i);
+            let key = uuid.to_lowercase();
+            match owner.get(&key) {
+                Some(first) => report.note(
+                    &p.src.path,
+                    0,
+                    format!(
+                        "page `id:: {uuid}` is already used by `{first}`, references to it point there"
+                    ),
+                ),
+                None => {
+                    owner.insert(key.clone(), p.src.path.clone());
+                    refs.insert(key, (link.clone(), String::new()));
+                }
+            }
+        }
         let mut used = HashSet::new();
         for b in &mut p.page.blocks {
             let id = b.body.iter().find_map(|l| match l {
@@ -224,13 +257,13 @@ fn collect_ids(planned: &mut [Planned], refs: &mut Refs, report: &mut Report) {
                 _ => None,
             });
             let Some(uuid) = id else { continue };
-            if b.head.trim_start().starts_with("```") {
-                // After a fence opener the anchor would be part of the info
-                // string, so there is nothing for a reference to point at.
+            if page::anchor_line(&block_lines(b)).is_none() {
+                // The anchor belongs on the block's last line, and inside a
+                // code block it is code, not something to point at.
                 report.note(
                     &p.src.path,
                     b.line,
-                    "`id::` on a code block cannot become an anchor, references to it are kept as text",
+                    "`id::` on a block that ends in a code block cannot become an anchor, references to it are kept as text",
                 );
                 continue;
             }
@@ -245,7 +278,7 @@ fn collect_ids(planned: &mut [Planned], refs: &mut Refs, report: &mut Report) {
             let anchor = anchor_for(&uuid, &mut used);
             owner.insert(key.clone(), p.src.path.clone());
             refs.insert(key, (link.clone(), anchor.clone()));
-            b.head = format!("{} ^{anchor}", b.head).trim_start().to_owned();
+            b.anchor = Some(anchor);
         }
     }
 }
@@ -383,7 +416,12 @@ pub fn map_graph(files: &[SourceFile], opts: &Options) -> Output {
     // Two pages can want one file: a `title::` onto another page's name, or
     // journals whose daily format has no day in it. The first one keeps it.
     let mut taken: HashMap<String, String> = HashMap::new();
-    planned.retain(|p| match taken.get(&p.path.to_lowercase()) {
+    // Two names that differ only in case are two files on Linux and one on
+    // macOS or Windows, where the second is left alone and reported as
+    // already in the vault. Keeping both is the answer the filesystem can
+    // still refuse; dropping one is an answer it cannot undo.
+    let mut folded: HashMap<String, String> = HashMap::new();
+    planned.retain(|p| match taken.get(&p.path) {
         Some(first) => {
             out.report.note(
                 &p.src.path,
@@ -396,7 +434,18 @@ pub fn map_graph(files: &[SourceFile], opts: &Options) -> Output {
             false
         }
         None => {
-            taken.insert(p.path.to_lowercase(), p.src.path.clone());
+            if let Some(first) = folded.get(&p.path.to_lowercase()) {
+                out.report.note(
+                    &p.src.path,
+                    0,
+                    format!(
+                        "maps to `{}`, which differs only in case from the target of `{first}`; a filesystem that ignores case keeps only one of them",
+                        p.path
+                    ),
+                );
+            }
+            folded.insert(p.path.to_lowercase(), p.src.path.clone());
+            taken.insert(p.path.clone(), p.src.path.clone());
             true
         }
     });
@@ -425,6 +474,19 @@ pub struct Summary {
     pub unmapped: usize,
     /// Vault path of the report.
     pub report: String,
+}
+
+/// A report name no imported page wants. The report is the one file the
+/// importer overwrites, and that licence covers only reports it wrote.
+fn report_path(dest: &str, pages: &[Mapped]) -> String {
+    let taken: HashSet<String> = pages.iter().map(|m| m.path.to_lowercase()).collect();
+    let mut path = join(dest, "import-report.md");
+    let mut n = 1;
+    while taken.contains(&path.to_lowercase()) {
+        path = join(dest, &format!("import-report-{n}.md"));
+        n += 1;
+    }
+    path
 }
 
 /// Reads the graph, writes what maps into the vault without overwriting
@@ -475,7 +537,7 @@ pub fn run(vault: &Vault, cfg: &AppConfig, graph: &Path, dest: &str) -> Result<S
         );
     }
     let mut s = Summary {
-        report: join(dest, "import-report.md"),
+        report: report_path(dest, &out.pages),
         // What the mapping could not map; writing counts its own skips.
         unmapped: out.report.entries.len(),
         ..Default::default()
@@ -802,8 +864,80 @@ mod tests {
         assert!(
             whats
                 .iter()
-                .any(|w| w.starts_with("`id::` on a code block")),
+                .any(|w| w.starts_with("`id::` on a block that ends in a code block")),
             "{whats:?}"
+        );
+    }
+
+    #[test]
+    fn an_id_on_a_block_that_ends_in_a_code_block_is_reported_and_not_linked() {
+        let id = "64f1a2b3-0000-4000-8000-000000000001";
+        let out = map_one(
+            "pages/a.md",
+            &format!("- notes\n  id:: {id}\n  ```\n  x\n  ```\n"),
+        );
+        assert!(!out.pages[0].text.contains('^'), "{}", out.pages[0].text);
+        let whats: Vec<_> = out.report.entries.iter().map(|e| e.what.as_str()).collect();
+        assert_eq!(
+            whats,
+            vec![
+                "`id::` on a block that ends in a code block cannot become an anchor, references to it are kept as text"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_anchor_goes_on_the_last_line_of_a_block_that_has_more_than_one() {
+        let id = "64f1a2b3-0000-4000-8000-000000000001";
+        let files = vec![
+            SourceFile {
+                path: "pages/a.md".into(),
+                text: format!("- notes\n  id:: {id}\n  kept:: yes\n"),
+            },
+            SourceFile {
+                path: "pages/b.md".into(),
+                text: format!("- (({id}))\n"),
+            },
+        ];
+        let out = map(&files);
+        assert_eq!(out.pages[0].text, "- notes\n  kept:: yes ^64f1a2b3\n");
+        assert_eq!(out.pages[1].text, "- [[a#^64f1a2b3]]\n");
+    }
+
+    #[test]
+    fn a_page_id_is_a_link_to_the_page_and_leaves_the_frontmatter() {
+        let id = "64f1a2b3-0000-4000-8000-000000000001";
+        let files = vec![
+            SourceFile {
+                path: "pages/a.md".into(),
+                text: format!("- id:: {id}\n  public:: true\n- body\n"),
+            },
+            SourceFile {
+                path: "pages/b.md".into(),
+                text: format!("- (({id})) and {{{{embed (({id}))}}}}\n"),
+            },
+        ];
+        let out = map(&files);
+        assert_eq!(out.pages[0].text, "---\npublic: true\n---\n- body\n");
+        assert_eq!(out.pages[1].text, "- [[a]] and ![[a]]\n");
+        assert!(out.report.is_empty(), "{:?}", out.report.entries);
+    }
+
+    #[test]
+    fn the_report_gives_way_to_a_page_that_wants_its_name() {
+        let graph = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(graph.path().join("pages")).unwrap();
+        std::fs::write(graph.path().join("pages/import-report.md"), "- mine\n").unwrap();
+        let d = tempfile::tempdir().unwrap();
+        let vault = Vault::open(d.path()).unwrap();
+        let s = run(&vault, &AppConfig::default(), graph.path(), "").unwrap();
+        assert_eq!(s.report, "import-report-1.md");
+        assert_eq!(vault.read("import-report.md").unwrap(), "- mine\n");
+        assert!(
+            vault
+                .read("import-report-1.md")
+                .unwrap()
+                .contains("Imported 1 pages")
         );
     }
 
@@ -863,7 +997,7 @@ mod tests {
         let files = vec![
             SourceFile {
                 path: "pages/a.md".into(),
-                text: "title:: B\n\n- from a\n".into(),
+                text: "title:: b\n\n- from a\n".into(),
             },
             SourceFile {
                 path: "pages/b.md".into(),
@@ -878,13 +1012,43 @@ mod tests {
             },
         );
         let paths: Vec<_> = out.pages.iter().map(|m| m.path.as_str()).collect();
-        assert_eq!(paths, vec!["B.md"]);
+        assert_eq!(paths, vec!["b.md"]);
         assert_eq!(out.pages[0].text, "\n- from a\n");
         let e = out.report.entries.last().unwrap();
         assert_eq!(e.file, "pages/b.md");
         assert_eq!(
             e.what,
             "maps to `b.md`, which `pages/a.md` already uses, not imported"
+        );
+    }
+
+    #[test]
+    fn two_targets_that_differ_only_in_case_are_both_imported_and_reported() {
+        let cfg = AppConfig::default();
+        let files = vec![
+            SourceFile {
+                path: "pages/Notes.md".into(),
+                text: "- upper\n".into(),
+            },
+            SourceFile {
+                path: "pages/notes.md".into(),
+                text: "- lower\n".into(),
+            },
+        ];
+        let out = map_graph(
+            &files,
+            &Options {
+                dest: "",
+                config: &cfg,
+            },
+        );
+        let paths: Vec<_> = out.pages.iter().map(|m| m.path.as_str()).collect();
+        assert_eq!(paths, vec!["Notes.md", "notes.md"]);
+        let e = out.report.entries.last().unwrap();
+        assert_eq!(e.file, "pages/notes.md");
+        assert_eq!(
+            e.what,
+            "maps to `notes.md`, which differs only in case from the target of `pages/Notes.md`; a filesystem that ignores case keeps only one of them"
         );
     }
 

@@ -6,7 +6,8 @@ use regex::{Captures, Regex};
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
-/// uuid (lowercase) → (page link name, anchor without `^`).
+/// uuid (lowercase) → (page link name, anchor without `^`, empty when the
+/// uuid is the page's own and the reference is to the page).
 pub type Refs = HashMap<String, (String, String)>;
 
 const UUID: &str = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
@@ -28,7 +29,12 @@ static PRIORITY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[#[A-C]\]").un
 fn link(refs: &Refs, uuid: &str, embed: bool) -> Option<String> {
     let (page, anchor) = refs.get(&uuid.to_lowercase())?;
     let bang = if embed { "!" } else { "" };
-    Some(format!("{bang}[[{page}#^{anchor}]]"))
+    let block = if anchor.is_empty() {
+        String::new()
+    } else {
+        format!("#^{anchor}")
+    };
+    Some(format!("{bang}[[{page}{block}]]"))
 }
 
 pub fn rewrite(text: &str, refs: &Refs, file: &str, line: usize, report: &mut Report) -> String {

@@ -1,15 +1,18 @@
 # Importing a Logseq graph
 
 *Import: Logseq graph* in the command palette asks for two folders: the
-Logseq graph, and the folder in this vault to import into (the vault root is
-fine). The graph is only read; nothing in it is written, moved or deleted.
+Logseq graph, which has to be outside this vault, and the folder in this
+vault to import into (the vault root is fine). The graph is only read;
+nothing in it is written, moved or deleted.
 When it is done, `import-report.md` opens from the destination and names
 every file and line the importer kept as text or left out. Read it once; it
 is the whole list of what did not map.
 
 Nothing already in the vault is overwritten. A page whose target exists is
 skipped and reported, so running the import twice writes nothing the second
-time. The report is the one file the importer replaces, since it wrote it.
+time. The report is the one file the importer replaces, since it wrote it;
+where a page of the graph wants that name, the page keeps it and the report
+becomes `import-report-1.md`.
 
 ## Where things go
 
@@ -18,6 +21,7 @@ time. The report is the one file the importer replaces, since it wrote it.
 | `pages/Name.md` | `<destination>/Name.md` |
 | `pages/a___b.md` (a namespaced page) | `<destination>/a/b.md` |
 | a file name that is not one Obsidian can use | the nearest name that is, reported; it never leaves the destination |
+| two pages whose file names differ only in case | both are imported, and reported: a filesystem that ignores case keeps only one |
 | `journals/2026_09_14.md` | the daily-notes folder, named by the daily-note format: `Daily/2026-09-14.md` |
 | `journals/<not a date>.md` | `<destination>/journals/<name>.md`, reported |
 | `assets/**` | `<destination>/assets/**`, copied |
@@ -35,7 +39,8 @@ daily note* looks.
 | `key:: value` lines at the top of a page | YAML frontmatter. `tags::` and `alias::` become lists (`alias` is written as `aliases`), with `[[ ]]` and `#` stripped from each entry; `true`, `false` and numbers are typed, but only where the number writes back as it was written, so `0012345` and `1.10` stay text; everything else is text as written. |
 | the same property twice | two lists are one list; any other repeat keeps the first value and is reported |
 | `title:: Other Name` | the file is `Other Name.md`, and `title` leaves the frontmatter. A title that cannot be a file name stays a property and is reported. |
-| `id:: <uuid>` under a block | `^<anchor>` at the end of the block's first line, eight characters of the uuid (more when the page already uses them). |
+| `id:: <uuid>` under a block | `^<anchor>` at the end of the block's last line, where Obsidian reads it, eight characters of the uuid (more when the page already uses them). A block that ends in a code block can carry no anchor and is reported. |
+| `id:: <uuid>` on the page | the page's name is its key in the vault, so `((uuid))` becomes `[[Page]]` and the property leaves the frontmatter |
 | `((uuid))` | `[[Page#^anchor]]`; the page is named by its file name, or by its path when two imported pages share one. |
 | the same `id::` on two blocks | the first block gets the anchor and every reference points at it; the second is reported |
 | `{{embed ((uuid))}}` | `![[Page#^anchor]]` |

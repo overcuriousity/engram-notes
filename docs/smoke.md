@@ -107,3 +107,5 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
 66. A namespaced page `a/b` is a folder `a` with `b.md`; `[[a/b]]` links to it.
 67. Run the import a second time into the same folder: nothing is written,
     and the report lists every file as already in the vault.
+68. Start the import again and pick a folder inside the vault as the graph:
+    it is refused, and nothing is written.

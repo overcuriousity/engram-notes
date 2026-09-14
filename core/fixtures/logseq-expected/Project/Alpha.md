@@ -17,8 +17,8 @@ rating: 5
     :LOGBOOK:
     CLOCK: [2026-09-14 Sun 10:00:00]--[2026-09-14 Sun 10:30:00] =>  00:30:00
     :END:
-- Notes ^64f1a2b30000
-  logseq.order-list-type:: number
+- Notes
+  logseq.order-list-type:: number ^64f1a2b30000
   - ```rust
     let x = ((64f1a2b3-0000-4000-8000-000000000001));
     ```

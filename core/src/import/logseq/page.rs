@@ -22,6 +22,8 @@ pub struct Block {
     /// The first line, after the bullet.
     pub head: String,
     pub body: Vec<Line>,
+    /// The `^anchor` this block answers to, without the `^`.
+    pub anchor: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -40,7 +42,7 @@ static PROPERTY: LazyLock<Regex> =
 pub fn is_property(line: &str) -> Option<(String, String)> {
     let c = PROPERTY.captures(line)?;
     let value = c.get(2).map_or("", |m| m.as_str());
-    Some((c[1].to_owned(), value.trim_end().to_owned()))
+    Some((c[1].to_owned(), value.trim().to_owned()))
 }
 
 /// Leading whitespace as outline levels: a tab is one, `indent` spaces are one.
@@ -95,7 +97,9 @@ fn is_fence(line: &str) -> bool {
 
 pub fn parse(text: &str, indent: usize) -> Page {
     let mut page = Page::default();
-    let mut in_fence = false;
+    // The depth of the block whose fence is open. A bullet no deeper than it
+    // is a bullet again, so one unclosed fence cannot swallow the page.
+    let mut fence: Option<usize> = None;
     let mut in_frontmatter = false;
     for (i, raw) in text.split('\n').enumerate() {
         let line = raw.trim_end_matches('\r');
@@ -112,24 +116,28 @@ pub fn parse(text: &str, indent: usize) -> Page {
                 continue;
             }
         }
-        if !in_fence && let Some((ws, head)) = bullet(line) {
-            page.blocks.push(Block {
-                line: n,
-                depth: level(ws, indent),
-                head: head.to_owned(),
-                body: Vec::new(),
-            });
-            in_fence = is_fence(head);
-            continue;
+        if let Some((ws, head)) = bullet(line) {
+            let depth = level(ws, indent);
+            if fence.is_none_or(|open| depth <= open) {
+                page.blocks.push(Block {
+                    line: n,
+                    depth,
+                    head: head.to_owned(),
+                    body: Vec::new(),
+                    anchor: None,
+                });
+                fence = is_fence(head).then_some(depth);
+                continue;
+            }
         }
         match page.blocks.last_mut() {
             Some(b) => {
                 let c = continuation(line, b.depth, indent);
                 if is_fence(c) {
-                    in_fence = !in_fence;
+                    fence = fence.is_none().then_some(b.depth);
                 }
                 b.body.push(match is_property(c) {
-                    Some((key, value)) if !in_fence => Line::Property {
+                    Some((key, value)) if fence.is_none() => Line::Property {
                         line: n,
                         key,
                         value,
@@ -169,11 +177,14 @@ fn lift_property_block(page: &mut Page) {
     let Some(head) = is_property(&first.head) else {
         return;
     };
+    // A child is a block of its own, so a first block that has one is a
+    // block the page would lose, and its children their parent.
     if first.depth != 0
         || !first
             .body
             .iter()
             .all(|l| matches!(l, Line::Property { .. }))
+        || page.blocks.get(1).is_some_and(|b| b.depth > 0)
     {
         return;
     }
@@ -186,6 +197,33 @@ fn lift_property_block(page: &mut Page) {
     }
 }
 
+/// The line of a block an `^anchor` belongs on. Obsidian reads a block's id
+/// from the end of the block, and a code fence takes no trailing text, so a
+/// block that ends in one can carry no anchor at all.
+pub fn anchor_line(lines: &[String]) -> Option<usize> {
+    let mut fence = false;
+    let mut last = 0;
+    for (i, l) in lines.iter().enumerate() {
+        if is_fence(l) {
+            fence = !fence;
+            last = i;
+        } else if !l.trim().is_empty() {
+            last = i;
+        }
+    }
+    let line = lines.get(last)?;
+    (!fence && !is_fence(line)).then_some(last)
+}
+
+/// One line of a block as it is written back.
+pub fn block_line(l: &Line) -> String {
+    match l {
+        Line::Text(t) => t.clone(),
+        Line::Property { key, value, .. } if value.is_empty() => format!("{key}::"),
+        Line::Property { key, value, .. } => format!("{key}:: {value}"),
+    }
+}
+
 pub fn render(page: &Page, frontmatter: &str, indent: usize) -> String {
     let mut out = String::from(frontmatter);
     for l in &page.preamble {
@@ -194,25 +232,30 @@ pub fn render(page: &Page, frontmatter: &str, indent: usize) -> String {
     }
     for b in &page.blocks {
         let pad = " ".repeat(b.depth * indent);
+        let mut lines = vec![b.head.clone()];
+        lines.extend(b.body.iter().map(block_line));
+        if let Some(a) = &b.anchor
+            && let Some(i) = anchor_line(&lines)
+        {
+            lines[i] = format!("{} ^{a}", lines[i]).trim_start().to_owned();
+        }
+        let Some((head, body)) = lines.split_first() else {
+            continue;
+        };
         out.push_str(&pad);
-        if b.head.is_empty() {
+        if head.is_empty() {
             out.push('-');
         } else {
             out.push_str("- ");
-            out.push_str(&b.head);
+            out.push_str(head);
         }
         out.push('\n');
-        for l in &b.body {
-            let text = match l {
-                Line::Text(t) => t.clone(),
-                Line::Property { key, value, .. } if value.is_empty() => format!("{key}::"),
-                Line::Property { key, value, .. } => format!("{key}:: {value}"),
-            };
+        for text in body {
             if !text.is_empty() {
                 out.push_str(&pad);
                 out.push_str("  ");
             }
-            out.push_str(&text);
+            out.push_str(text);
             out.push('\n');
         }
     }
@@ -342,6 +385,66 @@ mod tests {
             render(&p, "", 2),
             "- code\n  std::mem::take(&mut x);\n  foo::\n"
         );
+    }
+
+    #[test]
+    fn a_block_with_children_is_not_the_page_properties() {
+        let p = parse("- title:: X\n  - child\n", 2);
+        assert!(p.properties.is_empty());
+        assert_eq!(p.blocks.len(), 2);
+        assert_eq!(p.blocks[0].head, "title:: X");
+        assert_eq!(render(&p, "", 2), "- title:: X\n  - child\n");
+    }
+
+    #[test]
+    fn a_property_value_is_trimmed_at_both_ends() {
+        assert_eq!(
+            is_property("title::  Padded  "),
+            Some(("title".into(), "Padded".into()))
+        );
+        assert_eq!(is_property("empty:: "), Some(("empty".into(), "".into())));
+    }
+
+    #[test]
+    fn an_unclosed_fence_ends_at_the_next_bullet_of_its_own_level() {
+        let p = parse("- ```\n  code\n- next\n  - child\n", 2);
+        let heads: Vec<_> = p
+            .blocks
+            .iter()
+            .map(|b| (b.depth, b.head.as_str()))
+            .collect();
+        assert_eq!(heads, vec![(0, "```"), (0, "next"), (1, "child")]);
+        assert_eq!(text_lines(&p.blocks[0]), vec!["code"]);
+    }
+
+    #[test]
+    fn the_anchor_goes_on_the_blocks_last_line() {
+        let line = |s: &str| s.to_owned();
+        assert_eq!(anchor_line(&[line("one")]), Some(0));
+        assert_eq!(anchor_line(&[line("one"), line("two")]), Some(1));
+        // A trailing blank line is the end of the block, not a line of it.
+        assert_eq!(anchor_line(&[line("one"), line("")]), Some(0));
+        assert_eq!(anchor_line(&[line("")]), Some(0));
+        // Inside a code block an anchor would be code; after one it is fine.
+        assert_eq!(
+            anchor_line(&[line("one"), line("```"), line("x"), line("```")]),
+            None
+        );
+        assert_eq!(anchor_line(&[line("```"), line("x")]), None);
+        assert_eq!(
+            anchor_line(&[line("```"), line("x"), line("```"), line("after")]),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn render_puts_the_anchor_where_obsidian_reads_it() {
+        let mut p = parse("- head\n  kept:: yes\n", 2);
+        p.blocks[0].anchor = Some("64f1a2b3".into());
+        assert_eq!(render(&p, "", 2), "- head\n  kept:: yes ^64f1a2b3\n");
+        let mut p = parse("-\n", 2);
+        p.blocks[0].anchor = Some("64f1a2b3".into());
+        assert_eq!(render(&p, "", 2), "- ^64f1a2b3\n");
     }
 
     #[test]
