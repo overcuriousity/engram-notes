@@ -9,8 +9,8 @@ open licence from Logseq, and the semantic search and memory concepts from
 [engram](https://github.com/overcuriousity/engram), reimplemented locally so
 nothing runs but the app.
 
-Status: in development, no tagged release yet. See
-[the design](docs/superpowers/specs/2026-09-12-engram-notes-design.md).
+Status: in development, no tagged release yet. See [the roadmap](ROADMAP.md)
+and the designs it points to.
 
 ## Install
 
