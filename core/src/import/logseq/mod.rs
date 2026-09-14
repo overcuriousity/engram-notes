@@ -64,7 +64,7 @@ fn join(dest: &str, rest: &str) -> String {
 /// A title Obsidian would accept as a file name, with `/` for folders.
 fn usable_name(title: &str) -> bool {
     !title.is_empty()
-        && !title.contains(['\\', ':', '*', '?', '"', '<', '>', '|', '#', '^', '['])
+        && !title.contains(['\\', ':', '*', '?', '"', '<', '>', '|', '#', '^', '[', ']'])
         && !title.starts_with('/')
         && !title.ends_with('/')
         && title.split('/').all(|seg| {
