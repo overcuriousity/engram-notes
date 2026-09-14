@@ -40,6 +40,25 @@ impl Default for DailyNotes {
     }
 }
 
+/// Obsidian's `templates.json`, with its date and time formats in its tokens.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct TemplatesConfig {
+    pub folder: String,
+    pub date_format: String,
+    pub time_format: String,
+}
+
+impl Default for TemplatesConfig {
+    fn default() -> Self {
+        TemplatesConfig {
+            folder: "Templates".into(),
+            date_format: "YYYY-MM-DD".into(),
+            time_format: "HH:mm".into(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct SearchConfig {
@@ -122,8 +141,11 @@ impl Default for EmbedConfig {
 pub struct AppConfig {
     pub editor: EditorConfig,
     pub daily_notes: DailyNotes,
+    pub templates: TemplatesConfig,
     pub hotkeys: BTreeMap<String, String>,
     pub theme: String,
+    /// Names of the snippets in `.engram-notes/snippets/` that are switched on.
+    pub css_snippets: Vec<String>,
     pub search: SearchConfig,
     pub memory: MemoryConfig,
     pub embed: EmbedConfig,
@@ -134,8 +156,10 @@ impl Default for AppConfig {
         AppConfig {
             editor: EditorConfig::default(),
             daily_notes: DailyNotes::default(),
+            templates: TemplatesConfig::default(),
             hotkeys: BTreeMap::new(),
             theme: "system".into(),
+            css_snippets: Vec::new(),
             search: SearchConfig::default(),
             memory: MemoryConfig::default(),
             embed: EmbedConfig::default(),
@@ -196,13 +220,56 @@ pub fn save_graph(vault: &Vault, graph: &serde_json::Value) -> Result<()> {
 }
 
 pub fn daily_note_path(cfg: &AppConfig, today: chrono::NaiveDate) -> String {
-    let name = today.format(&cfg.daily_notes.format).to_string();
+    let name = crate::templates::format_date(&cfg.daily_notes.format, today.into());
     let folder = cfg.daily_notes.folder.trim_matches('/');
     if folder.is_empty() {
         format!("{name}.md")
     } else {
         format!("{folder}/{name}.md")
     }
+}
+
+/// One user stylesheet, as Obsidian keeps them under `.obsidian/snippets/`.
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct Snippet {
+    pub name: String,
+    pub css: String,
+    /// Why the file could not be read, if it could not; `css` is then empty.
+    pub error: Option<String>,
+}
+
+pub fn snippets_dir(vault: &Vault) -> PathBuf {
+    vault.config_dir().join("snippets")
+}
+
+/// Every `.css` file in the snippets folder, by name. The folder is made on
+/// the first look so there is somewhere to drop a file. A file that will not
+/// read is listed with its error, so one bad file does not take the rest of
+/// the user's styling down with it.
+pub fn snippets(vault: &Vault) -> Result<Vec<Snippet>> {
+    let dir = snippets_dir(vault);
+    std::fs::create_dir_all(&dir).map_err(|e| Error::io(&dir, e))?;
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(|e| Error::io(&dir, e))? {
+        let entry = entry.map_err(|e| Error::io(&dir, e))?;
+        let path = entry.path();
+        let Some(name) = path.file_stem().map(|s| s.to_string_lossy().into_owned()) else {
+            continue;
+        };
+        let is_css = path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("css"));
+        if !is_css || name.starts_with('.') || !path.is_file() {
+            continue;
+        }
+        let (css, error) = match std::fs::read_to_string(&path) {
+            Ok(css) => (css, None),
+            Err(e) => (String::new(), Some(e.to_string())),
+        };
+        out.push(Snippet { name, css, error });
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(out)
 }
 
 pub fn data_dir() -> Result<PathBuf> {
@@ -314,6 +381,74 @@ mod tests {
         assert!(!cfg.memory.enabled);
         assert_eq!(cfg.memory.spread_max, 3);
         assert_eq!(cfg.search.rrf_k, 60.0);
+    }
+
+    #[test]
+    fn templates_and_snippets_default_to_obsidians_shape() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.templates.folder, "Templates");
+        assert_eq!(cfg.templates.date_format, "YYYY-MM-DD");
+        assert_eq!(cfg.templates.time_format, "HH:mm");
+        assert!(cfg.css_snippets.is_empty());
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        std::fs::write(
+            d.path().join(".engram-notes/app.json"),
+            r#"{"theme":"dark","css_snippets":["wide"]}"#,
+        )
+        .unwrap();
+        let cfg = load_config(&v).unwrap();
+        assert_eq!(cfg.css_snippets, vec!["wide"]);
+        assert_eq!(cfg.templates.folder, "Templates");
+    }
+
+    #[test]
+    fn daily_path_takes_obsidians_tokens_too() {
+        let mut cfg = AppConfig::default();
+        cfg.daily_notes.format = "YYYY/MM/YYYY-MM-DD".into();
+        assert_eq!(
+            daily_note_path(&cfg, chrono::NaiveDate::from_ymd_opt(2026, 9, 12).unwrap()),
+            "Daily/2026/09/2026-09-12.md"
+        );
+    }
+
+    #[test]
+    fn snippets_are_css_files_by_name_and_the_folder_is_made() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        assert_eq!(snippets(&v).unwrap(), Vec::<Snippet>::new());
+        let dir = d.path().join(".engram-notes/snippets");
+        assert!(dir.is_dir());
+        std::fs::write(dir.join("wide.css"), ":root { --file-line-width: 900px; }").unwrap();
+        std::fs::write(dir.join("Aa.CSS"), "b {}").unwrap();
+        std::fs::write(dir.join("notes.txt"), "x").unwrap();
+        std::fs::write(dir.join(".draft.css"), "x").unwrap();
+        std::fs::create_dir(dir.join("folder.css")).unwrap();
+        let got = snippets(&v).unwrap();
+        assert_eq!(
+            got.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            vec!["Aa", "wide"]
+        );
+        assert_eq!(got[1].css, ":root { --file-line-width: 900px; }");
+        assert!(got.iter().all(|s| s.error.is_none()));
+    }
+
+    #[test]
+    fn a_snippet_that_will_not_read_is_listed_with_its_error() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let dir = d.path().join(".engram-notes/snippets");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("good.css"), "b {}").unwrap();
+        std::fs::write(dir.join("bad.css"), [0xff, 0xfe, 0x00]).unwrap();
+        let got = snippets(&v).unwrap();
+        assert_eq!(
+            got.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            vec!["bad", "good"]
+        );
+        assert!(got[0].error.is_some());
+        assert_eq!(got[0].css, "");
+        assert_eq!(got[1].css, "b {}");
     }
 
     #[test]

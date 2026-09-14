@@ -28,3 +28,14 @@ export function matchCommands(cmds: Command[], query: string): Command[] {
   const needle = query.toLowerCase().trim();
   return cmds.filter((c) => c.name.toLowerCase().includes(needle));
 }
+
+/** A template's name as Obsidian's picker shows it: the path inside the folder, without `.md`. */
+export function templateName(path: string, folder: string): string {
+  const prefix = folder.replace(/^\/+|\/+$/g, "");
+  const inner = prefix && path.startsWith(prefix + "/") ? path.slice(prefix.length + 1) : path;
+  return inner.replace(/\.md$/i, "");
+}
+
+export function matchTemplates(paths: string[], folder: string, query: string): NoteMatch[] {
+  return matchNotes(paths.map((p) => [p, templateName(p, folder)]), query);
+}

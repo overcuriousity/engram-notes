@@ -78,3 +78,22 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
     the indent width from settings.
 54. Delete a note that had folded items and create a new one at the same path:
     it opens with nothing folded.
+55. Put `Templates/Meeting.md` with `# {{title}}`, `{{date}} {{time}}` and
+    `{{date:dddd}}` in the vault; *Templates: Insert template* in a note lists
+    it and inserts it with the note's name, today, the time and the weekday.
+56. Set the daily note template to that file: Ctrl+D on a fresh day opens a
+    note whose heading is the date.
+57. Drop `wide.css` with `:root { --file-line-width: 1000px; }` in
+    `.engram-notes/snippets/`, reload in settings, switch it on: the line
+    widens at once and is still wide after a restart; off narrows it.
+58. A snippet selecting on `body.theme-dark` applies with the theme on
+    *System* and the OS dark, and stops when the OS turns light.
+59. `{{date:MMMM Do, YYYY}}` in a template inserts *September 14th, 2026*, and
+    a token engram does not know, such as `NNN`, comes through as written.
+60. A `.css` file the OS cannot read as text sits in settings with its error
+    and its switch disabled; every other snippet keeps applying.
+61. Select a sentence and click *link* in the Related pane: the link lands at
+    the cursor and the sentence is still there. Insert a template with the
+    same selection: the template takes its place.
+62. Open one note in two panes side by side, put the cursor in each, and
+    insert a template: it goes into the pane that was active, not the other.

@@ -25,7 +25,7 @@ class AppStateStore {
   titles = $state<[string, string][]>([]);
   showLeft = $state(true);
   showRight = $state(true);
-  palette = $state<"none" | "files" | "commands" | "search">("none");
+  palette = $state<"none" | "files" | "commands" | "search" | "templates">("none");
   settings = $state(false);
   rightPane = $state<"note" | "props" | "all" | "related">("note");
   watching = $state(true);
@@ -34,8 +34,13 @@ class AppStateStore {
   // The note a local graph centres on: the last one active in any pane.
   lastNote = $state<string | null>(null);
   embed = $state<api.EmbedStatus>({ model: null, state: "off", pending: 0, error: null });
-  // The Related pane asks the editor showing this note to insert at the cursor.
-  insertion = $state<{ path: string; text: string; n: number } | null>(null);
+  // What the templates folder holds, read when the picker opens.
+  templates = $state<string[]>([]);
+  // Every snippet file; `config.css_snippets` says which are on.
+  snippets = $state<api.Snippet[]>([]);
+  // The Related pane and the template picker ask one pane's editor to insert
+  // at its cursor. `replace` is a template taking the place of a selection.
+  insertion = $state<{ pane: number; path: string; text: string; replace: boolean; n: number } | null>(null);
   private nextId = 2;
 
   get pane(): Pane {
@@ -64,6 +69,7 @@ class AppStateStore {
     this.watching = info.watch_error === null;
     if (info.watch_error) this.say(`File watching is off: ${info.watch_error}. Changes are read when the window gains focus.`);
     await this.refresh();
+    await this.loadSnippets();
     await this.restore(await api.getWorkspace());
     await api.onIndexChanged(() => this.refresh());
     await api.onFileChanged((c) => this.externalChange(c));
@@ -103,6 +109,15 @@ class AppStateStore {
     if (right === "note" || right === "props" || right === "all" || right === "related") this.rightPane = right;
     const wanted = Number(ws.activePane);
     this.activePane = L.findPane(layout, wanted) ? wanted : L.panes(layout)[0].id;
+  }
+
+  // A snippet that fails to read keeps the vault opening; the pane says so.
+  async loadSnippets() {
+    try {
+      this.snippets = await api.snippets();
+    } catch (e) {
+      this.say(api.errorMessage(e));
+    }
   }
 
   async refresh() {
@@ -166,8 +181,8 @@ class AppStateStore {
     return this.openNote(path, line, "open_from_search", query);
   }
 
-  insertAtCursor(path: string, text: string) {
-    this.insertion = { path, text, n: (this.insertion?.n ?? 0) + 1 };
+  insertAtCursor(pane: number, path: string, text: string, replace = false) {
+    this.insertion = { pane, path, text, replace, n: (this.insertion?.n ?? 0) + 1 };
   }
 
   activate(paneId: number, index: number) {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { app } from "../lib/state.svelte";
+  import { templateTarget } from "../lib/commands";
   import { errorMessage, related, type Related } from "../lib/api";
 
   let data = $state<Related>({ associated: [], similar: [], suggested: [] });
@@ -17,9 +18,12 @@
       .catch((e) => app.say(errorMessage(e)));
   });
 
+  // A link goes in at the cursor and leaves any selection alone: this is a
+  // sidebar button, not an editing command, and it should not eat a paragraph.
   function link(title: string) {
-    if (!path) return;
-    app.insertAtCursor(path, `[[${title}]]`);
+    const into = templateTarget();
+    if (!into) return app.say("Open a note in an editing mode to insert a link.");
+    app.insertAtCursor(into.pane, into.path, `[[${title}]]`);
   }
 </script>
 

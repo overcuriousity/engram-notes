@@ -6,8 +6,10 @@ export interface RebuildStats { added: number; updated: number; removed: number;
 export interface AppConfig {
   editor: { default_mode: "live" | "source" | "reading"; indent: number };
   daily_notes: { folder: string; template: string | null; format: string };
+  templates: { folder: string; date_format: string; time_format: string };
   hotkeys: Record<string, string>;
   theme: "system" | "light" | "dark";
+  css_snippets: string[];
   search: { candidate_multiplier: number; rrf_k: number; cliff_factor: number; cliff_min_share: number; similarity_floor: number };
   memory: {
     enabled: boolean; activation_half_life_days: number; assoc_half_life_days: number;
@@ -16,6 +18,7 @@ export interface AppConfig {
   };
   embed: { model_dir: string | null; batch: number };
 }
+export interface Snippet { name: string; css: string; error?: string | null }
 export interface VaultInfo { root: string; config: AppConfig; stats: RebuildStats; index_recreated: boolean; watch_error: string | null }
 export interface NoteText { path: string; text: string; mtime_ms: number }
 export interface LinkRow {
@@ -84,6 +87,9 @@ export const setWorkspace = (workspace: Record<string, unknown>) => invoke<void>
 export const getFolds = (path: string) => invoke<string[]>("get_folds", { path });
 export const setFolds = (path: string, keys: string[]) => invoke<void>("set_folds", { path, keys });
 export const dailyNote = () => invoke<string>("daily_note");
+export const templates = () => invoke<string[]>("templates");
+export const renderTemplate = (path: string, into: string) => invoke<string>("render_template", { path, into });
+export const snippets = () => invoke<Snippet[]>("snippets");
 export const rescan = () => invoke<RebuildStats>("rescan");
 export const attachmentPath = (path: string) => invoke<string>("attachment_path", { path });
 export const openExternal = (path: string) => invoke<void>("open_external", { path });

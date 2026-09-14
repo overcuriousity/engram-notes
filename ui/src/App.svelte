@@ -5,6 +5,7 @@
   import { errorMessage } from "./lib/api";
   import { fileKind } from "./lib/files";
   import { bandDrag, edgeCursor, resizeEdge } from "./lib/frame";
+  import { activeSnippets, resolvedTheme } from "./lib/snippets";
   import VaultPicker from "./components/VaultPicker.svelte";
   import Ribbon from "./components/Ribbon.svelte";
   import Explorer from "./components/Explorer.svelte";
@@ -27,6 +28,33 @@
     const t = app.config?.theme ?? "system";
     if (t === "system") delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = t;
+  });
+
+  // Snippets select on Obsidian's `theme-dark` / `theme-light`, which say what
+  // is on screen even when the theme follows the OS.
+  let prefersDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
+  $effect(() => {
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => (prefersDark = e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  });
+  $effect(() => {
+    const resolved = resolvedTheme(app.config?.theme ?? "system", prefersDark);
+    document.body.classList.toggle("theme-dark", resolved === "dark");
+    document.body.classList.toggle("theme-light", resolved === "light");
+  });
+
+  // One <style> per enabled snippet, after the app's own sheet so it wins ties.
+  $effect(() => {
+    const active = activeSnippets(app.snippets, app.config?.css_snippets ?? []);
+    for (const el of document.head.querySelectorAll("style[data-snippet]")) el.remove();
+    for (const s of active) {
+      const el = document.createElement("style");
+      el.dataset.snippet = s.name;
+      el.textContent = s.css;
+      document.head.append(el);
+    }
   });
 
   $effect(() => {

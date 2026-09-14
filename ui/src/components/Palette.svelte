@@ -1,9 +1,10 @@
 <script lang="ts">
   import { app } from "../lib/state.svelte";
   import { allCommands } from "../lib/commands";
-  import { createNote, errorMessage, recordEvent, search, type SearchResults } from "../lib/api";
+  import { createNote, errorMessage, recordEvent, renderTemplate, search, type SearchResults } from "../lib/api";
   import SearchResults_ from "./SearchResults.svelte";
-  import { createName, matchCommands, matchNotes } from "../lib/palette";
+  import { createName, matchCommands, matchNotes, matchTemplates } from "../lib/palette";
+  import { templateTarget } from "../lib/commands";
 
   interface Item { label: string; detail: string; run: () => void | Promise<void> }
 
@@ -42,6 +43,18 @@
     if (app.palette === "search") return [];
     if (app.palette === "commands") {
       return matchCommands(allCommands(), q).map((c) => ({ label: c.name, detail: c.hotkey, run: c.run }));
+    }
+    if (app.palette === "templates") {
+      // The target is read when the item runs: the note may have changed since the picker opened.
+      return matchTemplates(app.templates, app.config?.templates.folder ?? "", q).map((m) => ({
+        label: m.title,
+        detail: m.path,
+        run: async () => {
+          const into = templateTarget();
+          if (!into) return app.say("Open a note in an editing mode to insert a template.");
+          app.insertAtCursor(into.pane, into.path, await renderTemplate(m.path, into.path), true);
+        },
+      }));
     }
     const matches = matchNotes(app.titles, q);
     const notes: Item[] = matches.map((m) => ({ label: m.title, detail: m.path, run: () => app.openNote(m.path) }));
@@ -93,7 +106,7 @@
 {#if app.palette !== "none"}
   <div class="scrim" onclick={() => (app.palette = "none")} role="presentation">
     <div class="palette" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1" onkeydown={() => {}}>
-      <input bind:this={input} bind:value={q} onkeydown={onKey} placeholder={app.palette === "files" ? "Open note…" : app.palette === "search" ? "Search the vault…" : "Run command…"} />
+      <input bind:this={input} bind:value={q} onkeydown={onKey} placeholder={app.palette === "files" ? "Open note…" : app.palette === "search" ? "Search the vault…" : app.palette === "templates" ? "Insert template…" : "Run command…"} />
       {#if app.palette === "search"}
         <SearchResults_ results={found} {sel} onOpen={openHit} />
       {:else}

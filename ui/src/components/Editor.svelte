@@ -21,7 +21,7 @@
     focus: boolean;
     jump: { line: number } | null;
     onJumped: () => void;
-    insert: { text: string; n: number } | null;
+    insert: { text: string; replace: boolean; n: number } | null;
     onInserted: () => void;
     onchange: (t: string) => void;
     onblur: () => void;
@@ -169,13 +169,16 @@
     onJumped();
   });
 
-  // The Related pane's *link* action, applied where the cursor is.
+  // Put the text where the cursor is. A template takes the place of the
+  // selection, as Obsidian's insert does; the Related pane's *link* does not,
+  // so a stray click there cannot destroy what the user had highlighted.
   $effect(() => {
     const req = insert;
     const v = view;
     if (!req || !v) return;
-    const at = v.state.selection.main.head;
-    v.dispatch({ changes: { from: at, insert: req.text }, selection: { anchor: at + req.text.length } });
+    const { from, to } = v.state.selection.main;
+    const end = req.replace ? to : from;
+    v.dispatch({ changes: { from, to: end, insert: req.text }, selection: { anchor: from + req.text.length } });
     v.focus();
     onInserted();
   });

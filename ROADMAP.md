@@ -66,14 +66,24 @@ beside Obsidian (`docs/memory.md`).
   per note in the derived index, never in the file, and follow a rename.
 - 🔶 `editor.indent`, default two spaces.
 
-## 0.3 — Templates and stylesheets ⬜
+## 0.3 — Templates and stylesheets 🔶
 
 The two small things an Obsidian user reaches for on the first day, in
 Obsidian's shape. A templates folder in `app.json` and one command that
 inserts a template at the cursor, with `{{date}}`, `{{time}}` and `{{title}}`;
 the daily note keeps drawing on the same mechanism. CSS snippets: `.css` files
 in `.engram-notes/snippets/`, each switched on or off in settings, over the
-stable variable names the themes already expose.
+stable variable names the themes already expose. In review; what remains is
+smoke lines 55–58 in the real window.
+
+- 🔶 `templates.folder`, `date_format` and `time_format` in `app.json`, in
+  Obsidian's tokens (`YYYY-MM-DD`); a strftime pattern still works.
+- 🔶 *Templates: Insert template* picks from the folder and inserts at the
+  cursor, over the selection; `{{date:FMT}}` and `{{time:FMT}}` pick their own
+  format. The daily note's template is filled the same way.
+- 🔶 `.engram-notes/snippets/*.css`, each on or off under Appearance, written to
+  `css_snippets` in `app.json`; `body.theme-dark` / `.theme-light` say what is
+  on screen.
 
 ## 0.4 — The Logseq importer ⬜
 
