@@ -4,6 +4,7 @@
   import { allCommands, chord } from "./lib/commands";
   import { errorMessage } from "./lib/api";
   import { fileKind } from "./lib/files";
+  import { bandDrag, edgeCursor, resizeEdge } from "./lib/frame";
   import VaultPicker from "./components/VaultPicker.svelte";
   import Ribbon from "./components/Ribbon.svelte";
   import Explorer from "./components/Explorer.svelte";
@@ -33,10 +34,36 @@
     if (p && fileKind(p) === "note") app.lastNote = p;
   });
 
-  // Only a press on the band's own background drags; a press on a control does not.
-  function dragWindow(e: PointerEvent) {
-    if (e.button !== 0 || (e.target as HTMLElement).closest("button, input, a")) return;
-    void getCurrentWindow().startDragging();
+  const headerHeight = () =>
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--header-height")) || 40;
+
+  // The band has no overlay of its own: one that covered it swallowed every
+  // click on the tab strip, the explorer's actions and the sidebar's icons.
+  // A press in the band drags the window only when it landed on no control.
+  const onBand = (e: PointerEvent | MouseEvent) => bandDrag(e.target as Element | null, e.clientY, headerHeight());
+
+  const edgeAt = (e: PointerEvent | MouseEvent) => resizeEdge(e.clientX, e.clientY, innerWidth, innerHeight);
+
+  // Undecorated windows get no resize border from the compositor, so the edges
+  // are ours too. An edge outranks the band: the top few pixels resize.
+  function framePress(e: PointerEvent) {
+    if (e.button !== 0) return;
+    const edge = edgeAt(e);
+    if (edge) {
+      e.preventDefault();
+      void getCurrentWindow().startResizeDragging(edge);
+    } else if (onBand(e)) {
+      void getCurrentWindow().startDragging();
+    }
+  }
+
+  function frameCursor(e: PointerEvent) {
+    const cursor = edgeCursor(edgeAt(e));
+    if (document.documentElement.dataset.cursor !== cursor) document.documentElement.dataset.cursor = cursor;
+  }
+
+  function maximizeFromBand(e: MouseEvent) {
+    if (onBand(e)) void getCurrentWindow().toggleMaximize();
   }
 
   function onKey(e: KeyboardEvent) {
@@ -57,10 +84,16 @@
 {#if !app.root}
   <VaultPicker />
 {:else}
-  <div class="layout" class:no-left={!app.showLeft} class:no-right={!app.showRight}>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="layout"
+    class:no-left={!app.showLeft}
+    class:no-right={!app.showRight}
+    onpointerdown={framePress}
+    onpointermove={frameCursor}
+    ondblclick={maximizeFromBand}
+  >
     <Ribbon />
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="bandgrip" onpointerdown={dragWindow} ondblclick={() => getCurrentWindow().toggleMaximize()}></div>
     <WindowControls />
     <aside class="sidebar">
       {#if app.showLeft}<Explorer />{/if}

@@ -234,8 +234,13 @@ select option { background: var(--bg); color: var(--fg); }
 .settings .pick { border: 1px solid var(--border); border-radius: var(--radius); padding: 2px 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings .row { display: flex; justify-content: flex-end; padding: 8px 14px 0; }
 
-/* The band is the titlebar: its empty right end drags the window. */
-.bandgrip { position: fixed; top: 0; right: var(--frame-right-space); left: 0; height: var(--header-height); z-index: 0; }
+/* An edge resize takes the cursor from whatever it is hovering. */
+html[data-cursor="ns-resize"] * { cursor: ns-resize !important; }
+html[data-cursor="ew-resize"] * { cursor: ew-resize !important; }
+html[data-cursor="nesw-resize"] * { cursor: nesw-resize !important; }
+html[data-cursor="nwse-resize"] * { cursor: nwse-resize !important; }
+
+/* The band is the titlebar: a press on its background drags the window. */
 .wincontrols { position: fixed; top: 0; right: 0; height: var(--header-height); display: flex; align-items: stretch; z-index: 5; }
 .wincontrols .icon { width: calc(var(--frame-right-space) / 3); border-radius: 0; }
 .wincontrols .icon:hover { background: var(--bg-3); }
