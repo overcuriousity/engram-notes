@@ -9,6 +9,7 @@ describe("outline items", () => {
     expect(parseItem("  3) b")).toEqual({ indent: 2, marker: "3)", task: null, text: "b" });
     expect(parseItem("\t- [x] c")).toEqual({ indent: 4, marker: "-", task: "[x]", text: "c" });
     expect(parseItem("- ")).toEqual({ indent: 0, marker: "-", task: null, text: "" });
+    expect(parseItem("  \t- d")).toEqual({ indent: 6, marker: "-", task: null, text: "d" });
     expect(parseItem("plain")).toBeNull();
     expect(parseItem("-no space")).toBeNull();
     expect(indentOf("\t  x")).toBe(6);
@@ -35,6 +36,11 @@ describe("outline items", () => {
     expect([...outlinePaths(l)]).toEqual([
       [0, "0:0"], [1, "0:0.0"], [2, "0:0.1"], [3, "0:1"], [7, "1:0"], [9, "1:1"],
     ]);
+  });
+
+  it("keys a shallower sibling as the next child, not as a repeat of the deeper one", () => {
+    expect([...outlinePaths(L("- a\n    - b\n  - c"))]).toEqual([[0, "0:0"], [1, "0:0.0"], [2, "0:0.1"]]);
+    expect([...outlinePaths(L("  - a\n- b"))]).toEqual([[0, "0:0"], [1, "0:1"]]);
   });
 });
 

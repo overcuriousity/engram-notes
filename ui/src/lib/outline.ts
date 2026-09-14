@@ -9,7 +9,7 @@ export interface Item {
 }
 
 const ITEM = /^( *)([-*+]|\d+[.)])( +)(\[[ xX]\] +)?(.*)$/;
-const TABS = /^\t+/;
+const WS = /^[ \t]*/;
 const ORDERED = /^(\s*)(\d+)([.)])(\s)/;
 
 export const isBlank = (line: string) => line.trim() === "";
@@ -25,8 +25,14 @@ export function indentOf(line: string): number {
   return n;
 }
 
+// Characters of leading whitespace, which is what a cursor offset counts.
+export const indentChars = (line: string) => WS.exec(line)![0].length;
+
+// The indent as spaces, so a tab anywhere in it parses like any other item.
+const expandIndent = (line: string) => " ".repeat(indentOf(line)) + line.slice(indentChars(line));
+
 export function parseItem(line: string): Item | null {
-  const m = ITEM.exec(line.replace(TABS, (t) => "    ".repeat(t.length)));
+  const m = ITEM.exec(expandIndent(line));
   if (!m) return null;
   return { indent: m[1].length, marker: m[2], task: m[4] ? m[4].trim() : null, text: m[5] };
 }
@@ -94,8 +100,11 @@ export function outlinePaths(lines: string[]): Map<number, string> {
       inList = true;
       block++;
     }
-    while (stack.length && ind < stack[stack.length - 1].indent) stack.pop();
-    if (!stack.length || ind > stack[stack.length - 1].indent) stack.push({ indent: ind, count: 0 });
+    // An indent that drops but stays deeper than the level above it is the same
+    // depth as the level it replaces, so the replacement carries that count on.
+    let popped: number | null = null;
+    while (stack.length && ind < stack[stack.length - 1].indent) popped = stack.pop()!.count;
+    if (!stack.length || ind > stack[stack.length - 1].indent) stack.push({ indent: ind, count: popped ?? 0 });
     stack[stack.length - 1].count++;
     out.set(i, `${block}:${stack.map((s) => s.count - 1).join(".")}`);
   }
