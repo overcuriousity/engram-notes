@@ -161,7 +161,11 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
 pub fn load_config(vault: &Vault) -> Result<AppConfig> {
     let path = vault.config_dir().join("app.json");
     match read_json::<AppConfig>(&path)? {
-        Some(cfg) => Ok(cfg),
+        Some(mut cfg) => {
+            // An indent of zero is one no editor can build a unit from.
+            cfg.editor.indent = cfg.editor.indent.clamp(1, 8);
+            Ok(cfg)
+        }
         None => {
             let cfg = AppConfig::default();
             write_json(&path, &cfg)?;
@@ -325,5 +329,16 @@ mod tests {
         let cfg = load_config(&v).unwrap();
         assert_eq!(cfg.editor.default_mode, "source");
         assert_eq!(cfg.editor.indent, 2);
+    }
+
+    #[test]
+    fn editor_indent_is_clamped_to_a_width_an_editor_can_build() {
+        let d = tempfile::tempdir().unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let file = d.path().join(".engram-notes/app.json");
+        std::fs::write(&file, r#"{"editor":{"indent":0}}"#).unwrap();
+        assert_eq!(load_config(&v).unwrap().editor.indent, 1);
+        std::fs::write(&file, r#"{"editor":{"indent":99}}"#).unwrap();
+        assert_eq!(load_config(&v).unwrap().editor.indent, 8);
     }
 }

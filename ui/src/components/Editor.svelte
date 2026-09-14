@@ -40,6 +40,8 @@
   let view = $state.raw<EditorView>();
   const modeComp = new Compartment();
   const forMode = (m: string) => (m === "live" ? livePreview({ onFollow, image }) : []);
+  // An empty indent unit makes indentUnit throw, which would leave the pane blank.
+  const indentSpaces = (n: number) => " ".repeat(Math.min(8, Math.max(1, Math.round(n) || 1)));
   let alive = true;
 
   onMount(() => {
@@ -61,7 +63,7 @@
           editorTheme,
           markdownHighlight,
           EditorView.lineWrapping,
-          indentUnit.of(" ".repeat(indent)),
+          indentUnit.of(indentSpaces(indent)),
           modeComp.of(forMode(mode)),
           completions(titles, tags),
           keymap.of([...closeBracketsKeymap, ...outlineKeymap, ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),

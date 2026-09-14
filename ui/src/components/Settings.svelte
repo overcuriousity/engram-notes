@@ -15,6 +15,15 @@
     }
   }
 
+  // A number input hands back anything that was typed, min and max included,
+  // and an indent of zero is one the editor cannot build.
+  function saveIndent() {
+    if (!cfg) return;
+    const n = cfg.editor.indent;
+    cfg.editor.indent = Number.isFinite(n) ? Math.min(8, Math.max(1, Math.round(n))) : 2;
+    return save();
+  }
+
   async function pickModel() {
     const dir = await open({ directory: true });
     if (typeof dir !== "string" || !cfg) return;
@@ -46,7 +55,7 @@
         </select>
       </label>
       <label>Indent width
-        <input type="number" min="1" max="8" step="1" bind:value={cfg.editor.indent} onchange={save} />
+        <input type="number" min="1" max="8" step="1" bind:value={cfg.editor.indent} onchange={saveIndent} />
       </label>
 
       <div class="pane-title">Daily notes</div>
