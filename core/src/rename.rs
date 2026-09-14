@@ -110,6 +110,7 @@ pub fn apply_rename(vault: &Vault, index: &mut Index, plan: &RenamePlan) -> Resu
     for m in &moves {
         if is_note(&m.to) {
             index.move_memory(&m.from, &m.to)?;
+            index.move_folds(&m.from, &m.to)?;
         }
     }
     let mut files: Vec<String> = moves
@@ -281,6 +282,20 @@ mod tests {
         assert!(ix.note("Old.md").unwrap().is_none());
         assert_eq!(ix.backlinks("sub/New.md").unwrap().len(), 1);
         assert!(ix.unresolved().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_rename_carries_folds_to_the_new_path() {
+        let d = tempfile::tempdir().unwrap();
+        let vault = Vault::open(d.path()).unwrap();
+        vault.write("a.md", "- one\n  - two\n").unwrap();
+        let mut index = Index::open_in_memory().unwrap();
+        index.rebuild(&vault).unwrap();
+        index.set_folds("a.md", &["0:0".into()]).unwrap();
+        let plan = plan_rename(&vault, &index, "a.md", "b.md").unwrap();
+        apply_rename(&vault, &mut index, &plan).unwrap();
+        assert!(index.folds("a.md").unwrap().is_empty());
+        assert_eq!(index.folds("b.md").unwrap(), vec!["0:0".to_string()]);
     }
 
     #[test]

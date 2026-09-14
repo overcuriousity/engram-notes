@@ -14,7 +14,7 @@ describe("commands", () => {
 
   it("applies hotkey overrides from app.json", () => {
     app.config = {
-      editor: { default_mode: "live" },
+      editor: { default_mode: "live", indent: 2 },
       daily_notes: { folder: "Daily", template: null, format: "%Y-%m-%d" },
       hotkeys: { "new-note": "Ctrl+Alt+N" },
       theme: "system",

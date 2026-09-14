@@ -133,3 +133,11 @@ Obsidian opens the note over the graph, in the graph's own pane. Ours opens it
 in the other split, making one when there is none, so the graph stays visible
 while you read — the user asked for this after using both side by side. There
 is no modifier: one behaviour, through `app.openInOtherPane`.
+
+## Not measured: the fold gutter
+
+The list and heading fold gutter (0.2) was built without a copy of Obsidian
+to measure: a 24px gutter, a 16px chevron shown on hover of the gutter or
+the active line, rotated when closed. Every other Obsidian-shaped surface in
+this application was measured from `obsidian.asar`; this one should be, on a
+machine that has it.

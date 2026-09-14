@@ -1,3 +1,4 @@
+use super::folds::drop_folds;
 use super::{Index, RebuildStats};
 use crate::Result;
 use crate::parse::{LinkKind, ParsedNote, parse};
@@ -72,6 +73,7 @@ impl Index {
         }
         for path in known.keys().filter(|p| !seen.contains(*p)) {
             tx.execute("DELETE FROM notes WHERE path=?1", [path])?;
+            drop_folds(&tx, path)?;
             stats.removed += 1;
         }
         tx.commit()?;
@@ -89,6 +91,7 @@ impl Index {
                 .execute("DELETE FROM notes WHERE path=?1", [rel])?
                 > 0;
             if existed {
+                drop_folds(&self.conn, rel)?;
                 self.resolve_all()?;
             }
             return Ok(existed);
@@ -123,6 +126,7 @@ impl Index {
             "DELETE FROM notes WHERE path=?1 OR substr(path, 1, length(?2))=?2",
             params![rel, dir],
         )?;
+        drop_folds(&self.conn, rel)?;
         self.resolve_all()
     }
 }

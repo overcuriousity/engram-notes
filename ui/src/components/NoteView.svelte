@@ -4,7 +4,7 @@
   import { resolveFile } from "../lib/files";
   import { app } from "../lib/state.svelte";
   import { findPane } from "../lib/layout";
-  import { resolveLink, createNote, anchorLine, tags as apiTags, typing, errorMessage } from "../lib/api";
+  import { resolveLink, createNote, anchorLine, tags as apiTags, typing, errorMessage, getFolds, setFolds } from "../lib/api";
   import Editor from "./Editor.svelte";
   import Reading from "./Reading.svelte";
   import PropertiesBlock from "./PropertiesBlock.svelte";
@@ -23,8 +23,30 @@
   const jumped = () => (app.jump = null);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let tagList = $state<string[]>([]);
+  let folds = $state<string[] | null>(null);
+  let foldTimer: ReturnType<typeof setTimeout> | undefined;
+  let foldSaid = false;
+  // Folding is frequent and cosmetic; one write per pause is enough.
+  function onFolds(keys: string[]) {
+    clearTimeout(foldTimer);
+    foldTimer = setTimeout(() => void setFolds(path, keys).catch(sayOnce), 500);
+  }
+  // A fold write fails once per pause for as long as the index is unavailable,
+  // and the note keeps folding; one message says it without burying the rest.
+  function sayOnce(e: unknown) {
+    if (foldSaid) return;
+    foldSaid = true;
+    app.say(errorMessage(e));
+  }
   onMount(async () => {
     tagList = (await apiTags()).map((t) => t.tag);
+    try {
+      folds = (await getFolds(path)) ?? [];
+    } catch (e) {
+      // The editor waits on this, so it opens unfolded rather than not at all.
+      folds = [];
+      sayOnce(e);
+    }
   });
 
   // A second pane's editor echoes the change it was given; equal text is not an edit.
@@ -94,6 +116,9 @@
         titles={() => app.titles}
         tags={() => tagList}
         {image}
+        indent={app.config?.editor.indent ?? 2}
+        {folds}
+        {onFolds}
       />
     {/if}
   </div>

@@ -4,7 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 export interface FileEntry { path: string; mtime_ms: number; size: number; is_markdown: boolean }
 export interface RebuildStats { added: number; updated: number; removed: number; unchanged: number }
 export interface AppConfig {
-  editor: { default_mode: "live" | "source" | "reading" };
+  editor: { default_mode: "live" | "source" | "reading"; indent: number };
   daily_notes: { folder: string; template: string | null; format: string };
   hotkeys: Record<string, string>;
   theme: "system" | "light" | "dark";
@@ -81,6 +81,8 @@ export const getConfig = () => invoke<AppConfig>("get_config");
 export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
 export const getWorkspace = () => invoke<Record<string, unknown>>("get_workspace");
 export const setWorkspace = (workspace: Record<string, unknown>) => invoke<void>("set_workspace", { workspace });
+export const getFolds = (path: string) => invoke<string[]>("get_folds", { path });
+export const setFolds = (path: string, keys: string[]) => invoke<void>("set_folds", { path, keys });
 export const dailyNote = () => invoke<string>("daily_note");
 export const rescan = () => invoke<RebuildStats>("rescan");
 export const attachmentPath = (path: string) => invoke<string>("attachment_path", { path });

@@ -127,3 +127,11 @@ CREATE TABLE IF NOT EXISTS events (
   sitting INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS events_at ON events(at);
+
+-- Fold state is view state, kept here so it is never written into a note.
+-- No foreign key: it follows a rename through move_folds, like memory.
+CREATE TABLE IF NOT EXISTS folds (
+  path TEXT NOT NULL,
+  key TEXT NOT NULL,
+  PRIMARY KEY (path, key)
+);

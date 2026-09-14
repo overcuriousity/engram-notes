@@ -34,6 +34,8 @@ const mock = `
         case "list_files": return FX.files.map((f) => ({ path: f.path, mtime_ms: 0, size: f.size ?? (f.text ?? "").length, is_markdown: md(f.path) }));
         case "titles": return FX.files.filter((f) => md(f.path)).map((f) => [f.path, f.path.split("/").pop().replace(/\\.md$/i, "")]);
         case "get_workspace": return FX.workspace ?? {};
+        case "get_folds": return (FX.folds ?? {})[args.path] ?? [];
+        case "set_folds": return null;
         case "get_config": return FX.config;
         case "read_note": { const f = file(args.path); if (!f) throw { code: "not_found", message: "not found: " + args.path }; return { path: f.path, text: f.text, mtime_ms: 0 }; }
         case "tags": return FX.tags ?? [];

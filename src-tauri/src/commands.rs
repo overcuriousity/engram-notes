@@ -519,6 +519,16 @@ pub fn set_workspace(state: State<AppState>, workspace: serde_json::Value) -> Cm
 }
 
 #[tauri::command]
+pub fn get_folds(state: State<AppState>, path: String) -> CmdResult<Vec<String>> {
+    with_open(&state, |o| Ok(o.index.folds(&path)?))
+}
+
+#[tauri::command]
+pub fn set_folds(state: State<AppState>, path: String, keys: Vec<String>) -> CmdResult<()> {
+    with_open(&state, |o| Ok(o.index.set_folds(&path, &keys)?))
+}
+
+#[tauri::command]
 pub fn daily_note(state: State<AppState>) -> CmdResult<String> {
     with_open(&state, |o| {
         let path = config::daily_note_path(&o.config, chrono::Local::now().date_naive());
