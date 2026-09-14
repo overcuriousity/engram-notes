@@ -69,23 +69,31 @@ pub fn rewrite(text: &str, refs: &Refs, file: &str, line: usize, report: &mut Re
 
 /// A block's first line: Logseq's marker becomes Obsidian's checkbox.
 pub fn task(head: &str, file: &str, line: usize, report: &mut Report) -> String {
+    // Only a marker that becomes a checkbox is rewritten; every other head is
+    // returned as written, down to the two spaces of a hard line break.
     let out = match TASK.captures(head) {
         Some(c) => {
             let marker = &c[1];
             let rest = &head[c[0].len()..];
-            match marker {
-                "TODO" => format!("[ ] {rest}"),
-                "DONE" => format!("[x] {rest}"),
-                "CANCELED" | "CANCELLED" => {
-                    report.note(
-                        file,
-                        line,
-                        format!("task marker `{marker}` has no checkbox form, kept as text"),
-                    );
-                    head.to_owned()
+            if marker == "CANCELED" || marker == "CANCELLED" {
+                report.note(
+                    file,
+                    line,
+                    format!("task marker `{marker}` has no checkbox form, kept as text"),
+                );
+                head.to_owned()
+            } else {
+                let (check, body) = match marker {
+                    "TODO" => ("[ ]", rest.to_owned()),
+                    "DONE" => ("[x]", rest.to_owned()),
+                    _ if rest.is_empty() => ("[ ]", marker.to_owned()),
+                    _ => ("[ ]", format!("{marker} {rest}")),
+                };
+                if body.is_empty() {
+                    check.to_owned()
+                } else {
+                    format!("{check} {body}")
                 }
-                _ if rest.is_empty() => format!("[ ] {marker}"),
-                _ => format!("[ ] {marker} {rest}"),
             }
         }
         None => head.to_owned(),
@@ -97,7 +105,7 @@ pub fn task(head: &str, file: &str, line: usize, report: &mut Report) -> String 
             format!("priority `{}` kept as text", p.as_str()),
         );
     }
-    out.trim_end().to_owned()
+    out
 }
 
 /// Lines Obsidian has no reading of. `CLOCK:` lines sit inside the logbook
@@ -235,6 +243,15 @@ mod tests {
             "[ ] [#A] urgent"
         );
         assert_eq!(rep.entries[1].what, "priority `[#A]` kept as text");
+    }
+
+    #[test]
+    fn a_head_that_is_not_a_task_keeps_its_hard_line_break() {
+        let mut rep = Report::default();
+        assert_eq!(task("a line  ", "f", 1, &mut rep), "a line  ");
+        assert_eq!(task("CANCELED x  ", "f", 1, &mut rep), "CANCELED x  ");
+        assert_eq!(task("TODO", "f", 1, &mut rep), "[ ]");
+        assert_eq!(task("DONE", "f", 1, &mut rep), "[x]");
     }
 
     #[test]

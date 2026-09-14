@@ -32,12 +32,15 @@ pub struct Page {
     pub blocks: Vec<Block>,
 }
 
+/// Logseq separates the key from the value with a space, so `std::mem::take`
+/// in prose is not a property and must not be rewritten as one.
 static PROPERTY: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s*([A-Za-z0-9_.\-]+)::\s?(.*)$").unwrap());
+    LazyLock::new(|| Regex::new(r"^\s*([A-Za-z0-9_.\-]+)::(?:[ \t](.*))?$").unwrap());
 
 pub fn is_property(line: &str) -> Option<(String, String)> {
     let c = PROPERTY.captures(line)?;
-    Some((c[1].to_owned(), c[2].trim_end().to_owned()))
+    let value = c.get(2).map_or("", |m| m.as_str());
+    Some((c[1].to_owned(), value.trim_end().to_owned()))
 }
 
 /// Leading whitespace as outline levels: a tab is one, `indent` spaces are one.
@@ -202,6 +205,7 @@ pub fn render(page: &Page, frontmatter: &str, indent: usize) -> String {
         for l in &b.body {
             let text = match l {
                 Line::Text(t) => t.clone(),
+                Line::Property { key, value, .. } if value.is_empty() => format!("{key}::"),
                 Line::Property { key, value, .. } => format!("{key}:: {value}"),
             };
             if !text.is_empty() {
@@ -327,6 +331,16 @@ mod tests {
         assert_eq!(
             render(&p, "---\ntitle: T\n---\n", 2),
             "---\ntitle: T\n---\n\n- a\n"
+        );
+    }
+
+    #[test]
+    fn a_path_with_colons_is_not_a_block_property() {
+        let p = parse("- code\n  std::mem::take(&mut x);\n  foo::\n", 2);
+        assert_eq!(text_lines(&p.blocks[0]), vec!["std::mem::take(&mut x);"]);
+        assert_eq!(
+            render(&p, "", 2),
+            "- code\n  std::mem::take(&mut x);\n  foo::\n"
         );
     }
 

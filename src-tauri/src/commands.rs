@@ -601,8 +601,12 @@ pub fn import_logseq(
 ) -> CmdResult<ImportSummary> {
     with_open(&state, |o| {
         let rel = inside_vault(&o.vault, &dest)?;
-        let summary = logseq_import::run(&o.vault, &o.config, std::path::Path::new(&source), &rel)?;
-        o.index.rebuild(&o.vault)?;
+        // An import that failed still wrote pages, and they are only findable
+        // once the index has seen them.
+        let out = logseq_import::run(&o.vault, &o.config, std::path::Path::new(&source), &rel);
+        let rebuilt = o.index.rebuild(&o.vault);
+        let summary = out?;
+        rebuilt?;
         Ok(summary)
     })
 }

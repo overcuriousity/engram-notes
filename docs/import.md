@@ -17,6 +17,7 @@ time. The report is the one file the importer replaces, since it wrote it.
 | --- | --- |
 | `pages/Name.md` | `<destination>/Name.md` |
 | `pages/a___b.md` (a namespaced page) | `<destination>/a/b.md` |
+| a file name that is not one Obsidian can use | the nearest name that is, reported; it never leaves the destination |
 | `journals/2026_09_14.md` | the daily-notes folder, named by the daily-note format: `Daily/2026-09-14.md` |
 | `journals/<not a date>.md` | `<destination>/journals/<name>.md`, reported |
 | `assets/**` | `<destination>/assets/**`, copied |
@@ -31,14 +32,16 @@ daily note* looks.
 
 | Logseq | engram-notes |
 | --- | --- |
-| `key:: value` lines at the top of a page | YAML frontmatter. `tags::` and `alias::` become lists (`alias` is written as `aliases`), with `[[ ]]` and `#` stripped from each entry; `true`, `false` and numbers are typed; everything else is text as written. |
+| `key:: value` lines at the top of a page | YAML frontmatter. `tags::` and `alias::` become lists (`alias` is written as `aliases`), with `[[ ]]` and `#` stripped from each entry; `true`, `false` and numbers are typed, but only where the number writes back as it was written, so `0012345` and `1.10` stay text; everything else is text as written. |
+| the same property twice | two lists are one list; any other repeat keeps the first value and is reported |
 | `title:: Other Name` | the file is `Other Name.md`, and `title` leaves the frontmatter. A title that cannot be a file name stays a property and is reported. |
 | `id:: <uuid>` under a block | `^<anchor>` at the end of the block's first line, eight characters of the uuid (more when the page already uses them). |
 | `((uuid))` | `[[Page#^anchor]]`; the page is named by its file name, or by its path when two imported pages share one. |
+| the same `id::` on two blocks | the first block gets the anchor and every reference points at it; the second is reported |
 | `{{embed ((uuid))}}` | `![[Page#^anchor]]` |
 | `{{embed [[Page]]}}` | `![[Page]]` |
 | `collapsed:: true` | dropped |
-| any other `key:: value` under a block | kept as text, reported (Obsidian has no block properties) |
+| any other `key:: value` under a block | kept as text, reported (Obsidian has no block properties). A property needs a space after `::`, so `std::mem::take(x)` in a line is prose and is left alone. |
 | `TODO x`, `DONE x` | `[ ] x`, `[x] x` |
 | `DOING x`, `LATER x`, `NOW x`, `WAITING x` | `[ ] DOING x` and so on, the word kept |
 | `CANCELED x` | kept as text, reported |

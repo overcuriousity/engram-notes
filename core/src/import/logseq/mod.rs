@@ -63,15 +63,41 @@ fn join(dest: &str, rest: &str) -> String {
     }
 }
 
+/// Characters Obsidian will not take in a file name; `/` is the folder
+/// separator and is judged per segment instead.
+const FORBIDDEN: [char; 12] = ['\\', ':', '*', '?', '"', '<', '>', '|', '#', '^', '[', ']'];
+
 /// A title Obsidian would accept as a file name, with `/` for folders.
 fn usable_name(title: &str) -> bool {
     !title.is_empty()
-        && !title.contains(['\\', ':', '*', '?', '"', '<', '>', '|', '#', '^', '[', ']'])
+        && !title.contains(FORBIDDEN)
         && !title.starts_with('/')
         && !title.ends_with('/')
         && title.split('/').all(|seg| {
-            !seg.is_empty() && seg != "." && seg != ".." && !seg.ends_with('.') && seg.trim() == seg
+            !seg.is_empty() && !seg.starts_with('.') && !seg.ends_with('.') && seg.trim() == seg
         })
+}
+
+/// The nearest usable name to one the graph's own file name produced. A
+/// segment that is left with nothing is dropped, which is what turns `..`
+/// into no segment at all and keeps the page inside the chosen folder.
+fn sanitize(name: &str) -> String {
+    let segments: Vec<String> = name
+        .split('/')
+        .map(|seg| {
+            let seg: String = seg
+                .chars()
+                .map(|c| if FORBIDDEN.contains(&c) { '-' } else { c })
+                .collect();
+            seg.trim().trim_matches('.').trim().to_owned()
+        })
+        .filter(|seg| !seg.is_empty())
+        .collect();
+    if segments.is_empty() {
+        "untitled".to_owned()
+    } else {
+        segments.join("/")
+    }
 }
 
 /// Logseq writes `.md`, but a graph carried through other tools can hold `.MD`.
@@ -129,6 +155,18 @@ fn plan<'a>(f: &'a SourceFile, opts: &Options, report: &mut Report) -> Planned<'
             );
         }
     }
+    // A title is checked above, so this is a name the graph's file name made:
+    // `..___etc___x.md` would leave the chosen folder, `a___.md` would be a
+    // dotfile the vault never shows.
+    if !usable_name(&name) {
+        let fixed = sanitize(&name);
+        report.note(
+            &f.path,
+            0,
+            format!("`{name}` cannot be a file name, imported as `{fixed}`"),
+        );
+        name = fixed;
+    }
     Planned {
         src: f,
         path: join(opts.dest, &format!("{name}.md")),
@@ -164,6 +202,9 @@ fn stem(path: &str) -> &str {
 /// blocks, so the second pass can render `^anchor` and rewrite `((uuid))`.
 fn collect_ids(planned: &mut [Planned], refs: &mut Refs, report: &mut Report) {
     let mut stems: HashMap<String, usize> = HashMap::new();
+    // A uuid copied onto a second block would otherwise point every reference
+    // at whichever page was planned last.
+    let mut owner: HashMap<String, String> = HashMap::new();
     for p in planned.iter() {
         *stems.entry(stem(&p.path).to_lowercase()).or_default() += 1;
     }
@@ -193,8 +234,17 @@ fn collect_ids(planned: &mut [Planned], refs: &mut Refs, report: &mut Report) {
                 );
                 continue;
             }
+            let key = uuid.to_lowercase();
+            if let Some(first) = owner.get(&key) {
+                let what = format!(
+                    "`id:: {uuid}` is already used by `{first}`, references to it point there and this block has no anchor"
+                );
+                report.note(&p.src.path, b.line, what);
+                continue;
+            }
             let anchor = anchor_for(&uuid, &mut used);
-            refs.insert(uuid.to_lowercase(), (link.clone(), anchor.clone()));
+            owner.insert(key.clone(), p.src.path.clone());
+            refs.insert(key, (link.clone(), anchor.clone()));
             b.head = format!("{} ^{anchor}", b.head).trim_start().to_owned();
         }
     }
@@ -220,11 +270,16 @@ fn yaml_value(key: &str, value: &str) -> serde_json::Value {
     if let Ok(b) = value.parse::<bool>() {
         return Value::Bool(b);
     }
-    if let Ok(n) = value.parse::<i64>() {
+    // Only when the number writes itself back the same way: the zeroes in
+    // `0012345` and `1.10` are part of an id or a version, not arithmetic.
+    if let Ok(n) = value.parse::<i64>()
+        && n.to_string() == value
+    {
         return Value::Number(n.into());
     }
     if let Ok(f) = value.parse::<f64>()
         && let Some(n) = serde_json::Number::from_f64(f)
+        && n.to_string() == value
     {
         return Value::Number(n);
     }
@@ -238,7 +293,24 @@ fn frontmatter(properties: &[(String, String)], file: &str, report: &mut Report)
     let mut map = serde_json::Map::new();
     for (k, v) in properties {
         let key = if k == "alias" { "aliases" } else { k.as_str() };
-        map.insert(key.to_owned(), yaml_value(k, v));
+        match (map.get_mut(key), yaml_value(k, v)) {
+            // `alias::` and `aliases::` are one key, and two lists are one list.
+            (Some(serde_json::Value::Array(have)), serde_json::Value::Array(more)) => {
+                for item in more {
+                    if !have.contains(&item) {
+                        have.push(item);
+                    }
+                }
+            }
+            (Some(_), _) => report.note(
+                file,
+                0,
+                format!("property `{k}:: {v}` repeats `{key}`, the first value is kept"),
+            ),
+            (None, value) => {
+                map.insert(key.to_owned(), value);
+            }
+        }
     }
     match serde_yaml_ng::to_string(&map) {
         Ok(yaml) => format!("---\n{yaml}---\n"),
@@ -813,6 +885,111 @@ mod tests {
         assert_eq!(
             e.what,
             "maps to `b.md`, which `pages/a.md` already uses, not imported"
+        );
+    }
+
+    fn map_one(path: &str, text: &str) -> Output {
+        map(&[SourceFile {
+            path: path.into(),
+            text: text.into(),
+        }])
+    }
+
+    #[test]
+    fn repeated_properties_merge_their_lists_and_report_the_rest() {
+        let out = map_one(
+            "pages/a.md",
+            "alias:: A\naliases:: B, A\ntags:: x\ntags:: y\nkind:: one\nkind:: two\n\n- x\n",
+        );
+        assert!(
+            out.pages[0]
+                .text
+                .starts_with("---\naliases:\n- A\n- B\ntags:\n- x\n- y\nkind: one\n---\n"),
+            "{}",
+            out.pages[0].text
+        );
+        let whats: Vec<_> = out.report.entries.iter().map(|e| e.what.as_str()).collect();
+        assert_eq!(
+            whats,
+            vec!["property `kind:: two` repeats `kind`, the first value is kept"]
+        );
+    }
+
+    #[test]
+    fn a_property_that_looks_like_a_number_keeps_how_it_was_written() {
+        let out = map_one(
+            "pages/a.md",
+            "isbn:: 0012345\nversion:: 1.10\nbuild:: 1.5\ncount:: 12\n\n- x\n",
+        );
+        assert!(
+            out.pages[0]
+                .text
+                .contains("isbn: '0012345'\nversion: '1.10'\nbuild: 1.5\ncount: 12\n"),
+            "{}",
+            out.pages[0].text
+        );
+    }
+
+    #[test]
+    fn one_uuid_on_two_pages_keeps_the_first_and_reports_the_second() {
+        let id = "64f1a2b3-0000-4000-8000-000000000001";
+        let files = vec![
+            SourceFile {
+                path: "pages/a.md".into(),
+                text: format!("- from a\n  id:: {id}\n"),
+            },
+            SourceFile {
+                path: "pages/b.md".into(),
+                text: format!("- from b\n  id:: {id}\n"),
+            },
+            SourceFile {
+                path: "pages/c.md".into(),
+                text: format!("- (({id}))\n"),
+            },
+        ];
+        let out = map(&files);
+        assert_eq!(out.pages[0].text, "- from a ^64f1a2b3\n");
+        assert_eq!(out.pages[1].text, "- from b\n");
+        assert_eq!(out.pages[2].text, "- [[a#^64f1a2b3]]\n");
+        let e = out.report.entries.last().unwrap();
+        assert_eq!((e.file.as_str(), e.line), ("pages/b.md", 1));
+        assert_eq!(
+            e.what,
+            format!(
+                "`id:: {id}` is already used by `pages/a.md`, references to it point there and this block has no anchor"
+            )
+        );
+    }
+
+    #[test]
+    fn a_file_name_that_leaves_the_folder_or_hides_the_page_is_made_usable() {
+        let cfg = AppConfig::default();
+        let files = vec![
+            SourceFile {
+                path: "pages/..___etc___x.md".into(),
+                text: "- x\n".into(),
+            },
+            SourceFile {
+                path: "pages/a___.md".into(),
+                text: "- y\n".into(),
+            },
+        ];
+        let out = map_graph(
+            &files,
+            &Options {
+                dest: "Logseq",
+                config: &cfg,
+            },
+        );
+        let paths: Vec<_> = out.pages.iter().map(|m| m.path.as_str()).collect();
+        assert_eq!(paths, vec!["Logseq/etc/x.md", "Logseq/a.md"]);
+        let whats: Vec<_> = out.report.entries.iter().map(|e| e.what.as_str()).collect();
+        assert_eq!(
+            whats,
+            vec![
+                "`../etc/x` cannot be a file name, imported as `etc/x`",
+                "`a/` cannot be a file name, imported as `a`"
+            ]
         );
     }
 

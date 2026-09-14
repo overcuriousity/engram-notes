@@ -51,8 +51,21 @@ export async function importLogseq() {
     const rest = s.unmapped ? `${s.unmapped} things to look at in the report.` : "Everything was mapped.";
     app.say(`Imported ${s.pages} pages and ${s.journals} journals. ${rest}`);
   } catch (e) {
+    // An import stops on the first write it cannot do, so what landed before
+    // it and the report that names it are already in the vault.
+    await app.refresh();
+    const report = reportPath(dest);
+    if (app.files.some((f) => f.path === report)) await app.openNote(report);
     app.say(errorMessage(e));
   }
+}
+
+/** Where a failed import left its report, vault-relative: there is no summary to read it from. */
+function reportPath(dest: string): string {
+  const root = app.root;
+  if (!root || !dest.startsWith(root)) return "";
+  const rel = dest.slice(root.length).replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  return rel ? `${rel}/import-report.md` : "import-report.md";
 }
 
 export const defaults: Command[] = [
