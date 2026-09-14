@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { EditorState, type Transaction } from "@codemirror/state";
-import { ensureSyntaxTree, indentUnit, codeFolding, foldable } from "@codemirror/language";
+import { ensureSyntaxTree, indentUnit, codeFolding, foldable, foldEffect } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { closeBrackets, insertBracket } from "@codemirror/autocomplete";
-import { enterInList, indentItem, listOnlyFolding, markdownBrackets, markdownEnter, moveItemDown, moveItemUp, outdentItem } from "./outline";
+import { enterInList, foldKeys, foldTransaction, indentItem, listOnlyFolding, markdownBrackets, markdownEnter, moveItemDown, moveItemUp, outdentItem } from "./outline";
 
 function stateOf(doc: string, cursor: number | { anchor: number; head: number }, indent = 2) {
   const state = EditorState.create({
@@ -87,5 +87,15 @@ describe("folding", () => {
     expect(foldable(s, l(4).from, l(4).to)).toBeNull();
     expect(foldable(s, l(6).from, l(6).to)).toEqual({ from: l(6).to, to: s.doc.length });
     expect(foldable(s, l(2).from, l(2).to)).toBeNull();
+  });
+
+  it("names folded items by outline path and headings by ordinal, and restores them", () => {
+    const s = stateOf("- a\n  - b\n- c\n  - d\n# H\ntext", 0);
+    const range = foldable(s, s.doc.line(3).from, s.doc.line(3).to)!;
+    const folded = s.update({ effects: foldEffect.of(range) }).state;
+    expect(foldKeys(folded)).toEqual(["0:1"]);
+    const restored = s.update(foldTransaction(s, ["0:1", "h1"])!).state;
+    expect(foldKeys(restored)).toEqual(["0:1", "h1"]);
+    expect(foldTransaction(s, ["9:9"])).toBeNull();
   });
 });

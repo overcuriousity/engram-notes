@@ -1,8 +1,8 @@
-import { EditorSelection, type EditorState, type Extension, type StateCommand } from "@codemirror/state";
+import { EditorSelection, type EditorState, type Extension, type StateCommand, type TransactionSpec } from "@codemirror/state";
 import type { KeyBinding } from "@codemirror/view";
 import { indentLess, indentMore } from "@codemirror/commands";
 import { acceptCompletion } from "@codemirror/autocomplete";
-import { codeFolding, foldGutter, foldNodeProp, getIndentUnit } from "@codemirror/language";
+import { codeFolding, foldEffect, foldGutter, foldNodeProp, foldable, foldedRanges, getIndentUnit } from "@codemirror/language";
 import { insertNewlineContinueMarkupCommand, markdownLanguage } from "@codemirror/lang-markdown";
 import * as O from "../lib/outline";
 
@@ -122,4 +122,43 @@ export function outlineFolding(): Extension {
       },
     }),
   ];
+}
+
+const HEADING = /^#{1,6}\s/;
+
+// A list item's key is its outline path; a heading's is its ordinal. Both
+// survive the edits that leave the structure alone, which is all that is asked.
+function keyOfLine(lines: string[], paths: Map<number, string>, n: number): string | null {
+  const p = paths.get(n);
+  if (p) return p;
+  if (!HEADING.test(lines[n])) return null;
+  let h = 0;
+  for (let i = 0; i <= n; i++) if (HEADING.test(lines[i])) h++;
+  return `h${h}`;
+}
+
+export function foldKeys(state: EditorState): string[] {
+  const lines = lineArray(state);
+  const paths = O.outlinePaths(lines);
+  const keys: string[] = [];
+  foldedRanges(state).between(0, state.doc.length, (from) => {
+    const k = keyOfLine(lines, paths, state.doc.lineAt(from).number - 1);
+    if (k) keys.push(k);
+  });
+  return keys;
+}
+
+export function foldTransaction(state: EditorState, keys: string[]): TransactionSpec | null {
+  const want = new Set(keys);
+  const lines = lineArray(state);
+  const paths = O.outlinePaths(lines);
+  const effects = [];
+  for (let n = 0; n < lines.length; n++) {
+    const k = keyOfLine(lines, paths, n);
+    if (!k || !want.has(k)) continue;
+    const l = state.doc.line(n + 1);
+    const r = foldable(state, l.from, l.to);
+    if (r) effects.push(foldEffect.of(r));
+  }
+  return effects.length ? { effects } : null;
 }
