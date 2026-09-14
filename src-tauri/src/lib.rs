@@ -39,6 +39,8 @@ pub fn run() {
             commands::set_config,
             commands::get_workspace,
             commands::set_workspace,
+            commands::get_folds,
+            commands::set_folds,
             commands::daily_note,
             commands::rescan,
             commands::anchor_line,

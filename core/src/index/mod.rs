@@ -1,5 +1,6 @@
 //! The derived view of a vault. Rebuildable from the files at any time.
 
+pub mod folds;
 pub mod fts;
 pub mod query;
 pub mod rebuild;
@@ -9,7 +10,7 @@ use crate::{Error, Result};
 use rusqlite::{Connection, ErrorCode};
 use std::path::{Path, PathBuf};
 
-pub const SCHEMA_VERSION: &str = "3";
+pub const SCHEMA_VERSION: &str = "4";
 const SCHEMA: &str = include_str!("schema.sql");
 
 pub struct Index {
