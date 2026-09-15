@@ -25,6 +25,22 @@ fn stem(path: &str) -> &str {
     name.strip_suffix(".md").unwrap_or(name)
 }
 
+/// How well a spelling match answers the query, best first. The list is cut to
+/// `limit`, so without a rank a vault whose paths all contain the query buries
+/// the note actually named by it.
+fn rank(title: &str, path: &str, q: &str) -> u8 {
+    let (title, stem) = (title.to_lowercase(), stem(path).to_lowercase());
+    if title == q || stem == q {
+        0
+    } else if title.starts_with(q) || stem.starts_with(q) {
+        1
+    } else if title.contains(q) || stem.contains(q) {
+        2
+    } else {
+        3
+    }
+}
+
 /// Notes whose title, stem or path contains the query, then notes `hybrid`
 /// finds above the divider that spelling did not, up to `limit`.
 pub fn link_candidates(
@@ -53,6 +69,8 @@ pub fn link_candidates(
             primed: false,
         })
         .collect();
+    // Stable, so notes of equal rank keep the index's title order.
+    out.sort_by_key(|c| rank(&c.title, &c.path, &q));
     if !q.is_empty() {
         let seen: HashSet<String> = out.iter().map(|c| c.path.clone()).collect();
         let found = super::hybrid(index, query, query_vec, cfg, mem, at, limit)?;
@@ -149,6 +167,35 @@ mod tests {
         let out = run(&ix, &mut e, "  ");
         assert_eq!(out.len(), 3);
         assert!(out.iter().all(|c| c.kind == MatchKind::Text));
+    }
+
+    #[test]
+    fn the_note_named_by_the_query_survives_the_cut() {
+        let d = tempfile::tempdir().unwrap();
+        fs::create_dir_all(d.path().join("Archive/rust")).unwrap();
+        for i in 0..30 {
+            fs::write(
+                d.path().join(format!("Archive/rust/n{i}.md")),
+                format!("# Note {i}\nnothing to do with it"),
+            )
+            .unwrap();
+        }
+        fs::write(d.path().join("Rust.md"), "# Rust\nownership").unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        let out = link_candidates(
+            &ix,
+            "rust",
+            None,
+            &SearchConfig::default(),
+            &MemoryConfig::default(),
+            0,
+            20,
+        )
+        .unwrap();
+        assert_eq!(out.len(), 20);
+        assert_eq!(out[0].path, "Rust.md");
     }
 
     #[test]

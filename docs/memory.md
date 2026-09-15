@@ -17,6 +17,13 @@ note's important part is at its beginning and everything downstream reasons
 per note. A vector is keyed by the hash of that text, so an unchanged body in
 a renamed or re-saved note keeps it.
 
+Because the passage is the whole note, a hit only the vector branch found has
+no position inside it: it opens at the note's first body line, and its row
+shows a lead of the body, cut to 200 characters, rather than a marked phrase.
+Only the full-text branch can point at a line, and it does. A finer position
+would have to come from a second splitter, and everything downstream reasons
+per note.
+
 **The floor.** A cosine below `similarity_floor` (0.83) says nothing, and the
 hit is a stranger. This is not in the spec; it is here because the model needs
 it. Measured over the 45 note pairs of a ten-note demo vault,

@@ -52,6 +52,19 @@ fn escape_html(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
+/// A result row is one line, and a passage is the whole note since 0.5, so a
+/// hit the vector branch alone found shows a lead instead of the body.
+const LEAD_CHARS: usize = 200;
+
+fn lead(text: &str) -> String {
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let Some((hard, _)) = flat.char_indices().nth(LEAD_CHARS) else {
+        return escape_html(&flat);
+    };
+    let at = flat[..hard].rfind(' ').unwrap_or(hard);
+    format!("{}…", escape_html(flat[..at].trim_end()))
+}
+
 /// Full-text and semantic retrieval fused into one list, with the divider
 /// drawn, priming applied and associated notes spread beneath it.
 ///
@@ -99,7 +112,7 @@ pub fn hybrid(
                 title: titles.get(&path).cloned().unwrap_or_else(|| path.clone()),
                 snippet: match text {
                     Some(h) => h.snippet.clone(),
-                    None => escape_html(passage.map_or("", |p| p.text.as_str())),
+                    None => lead(passage.map_or("", |p| p.text.as_str())),
                 },
                 heading: passage.map(|p| p.heading.clone()).filter(|h| !h.is_empty()),
                 line: passage
@@ -136,6 +149,15 @@ mod tests {
     use crate::memory::EventKind;
     use crate::vault::Vault;
     use std::fs;
+
+    #[test]
+    fn a_lead_is_one_line_and_cut_on_a_word() {
+        assert_eq!(lead("a\n\nb  c"), "a b c");
+        assert_eq!(lead("<b>&"), "&lt;b&gt;&amp;");
+        let long = lead(&"word ".repeat(100));
+        assert!(long.ends_with("word…"), "{long}");
+        assert!(long.chars().count() <= LEAD_CHARS + 1, "{}", long.len());
+    }
 
     fn vault_with_vectors() -> (tempfile::TempDir, Index, FakeEmbedder) {
         let d = tempfile::tempdir().unwrap();
