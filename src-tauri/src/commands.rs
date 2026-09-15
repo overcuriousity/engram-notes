@@ -402,7 +402,11 @@ pub fn link_candidates(
     query: String,
     limit: Option<usize>,
 ) -> CmdResult<Vec<LinkCandidate>> {
-    let vector = {
+    // One or two characters say nothing by meaning, and this runs a keystroke at
+    // a time behind the embedder's lock; below that the spelling branch answers.
+    let vector = if query.trim().chars().count() < 3 {
+        None
+    } else {
         let embed = state.embed.lock().unwrap().clone();
         let mut guard = embed.embedder.lock().unwrap();
         guard.as_mut().and_then(|m| m.embed_query(&query).ok())
