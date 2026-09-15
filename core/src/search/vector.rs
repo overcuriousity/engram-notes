@@ -244,8 +244,8 @@ mod tests {
         let q = e.embed_query("ownership rules").unwrap();
         let hits = ix.search_vectors(&q, 10).unwrap();
         assert_eq!(hits[0].path, "Rust.md");
-        assert_eq!(hits[0].heading, "Rust");
-        assert_eq!(hits[0].line, 2);
+        assert_eq!(hits[0].heading, "");
+        assert_eq!(hits[0].line, 1);
         assert!(hits[0].text.contains("ownership"));
         assert!(hits[0].similarity > hits[1].similarity);
     }

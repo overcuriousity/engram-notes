@@ -1,9 +1,13 @@
 import type { Graph, GraphNode, SemanticEdge } from "./api";
 import { mergeEdges, type DrawEdge } from "./semantic";
 
+/** One of Obsidian's colour groups: nodes the query matches take the colour. `rgb` is Obsidian's packed 0xRRGGBB. */
+export interface ColorGroup { query: string; color: { a: number; rgb: number } }
+
 /** Obsidian's graph.json keys, plus the local graph's depth. */
 export interface GraphSettings {
   search: string;
+  colorGroups: ColorGroup[];
   showTags: boolean;
   showAttachments: boolean;
   hideUnresolved: boolean;
@@ -25,6 +29,7 @@ export interface GraphSettings {
 // Obsidian's defaults.
 export const DEFAULTS: GraphSettings = {
   search: "",
+  colorGroups: [],
   showTags: false,
   showAttachments: false,
   hideUnresolved: false,
@@ -44,9 +49,32 @@ export const DEFAULTS: GraphSettings = {
 
 export function readSettings(raw: Record<string, unknown>): GraphSettings {
   const out: Record<string, unknown> = { ...DEFAULTS };
-  for (const [k, v] of Object.entries(DEFAULTS)) if (typeof raw[k] === typeof v) out[k] = raw[k];
+  for (const [k, v] of Object.entries(DEFAULTS)) if (!Array.isArray(v) && typeof raw[k] === typeof v) out[k] = raw[k];
+  out.colorGroups = readColorGroups(raw.colorGroups);
   return out as unknown as GraphSettings;
 }
+
+/** Obsidian's `colorGroups`, with anything malformed dropped rather than drawn. */
+export function readColorGroups(raw: unknown): ColorGroup[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ColorGroup[] = [];
+  for (const g of raw) {
+    if (!g || typeof g !== "object") continue;
+    const { query, color } = g as { query?: unknown; color?: { a?: unknown; rgb?: unknown } };
+    if (typeof query !== "string" || !color || typeof color !== "object" || typeof color.rgb !== "number") continue;
+    out.push({ query, color: { a: typeof color.a === "number" ? color.a : 1, rgb: color.rgb & 0xffffff } });
+  }
+  return out;
+}
+
+/** Obsidian's packed rgb as CSS. */
+export const hexColor = (rgb: number): string => `#${(rgb & 0xffffff).toString(16).padStart(6, "0")}`;
+
+/** A colour input's `#rrggbb` as Obsidian's packed rgb. */
+export const rgbInt = (hex: string): number => parseInt(hex.replace(/^#/, ""), 16) || 0;
+
+// Obsidian gives a new group a random colour; ours cycle, so a second group is never the first's twin.
+export const GROUP_COLORS = [0xe06c75, 0x61afef, 0x98c379, 0xe5c07b, 0xc678dd, 0x56b6c2, 0xd19a66, 0x7f8c8d];
 
 export interface Search { words: string[]; tags: string[]; paths: string[]; files: string[] }
 
@@ -71,7 +99,7 @@ export function searchWords(q: string): string {
   return [...q.matchAll(TERM)].filter((m) => !["tag:", "path:", "file:"].includes(m[1] ?? "")).map((m) => m[0]).join(" ");
 }
 
-export interface ViewNode { id: string; title: string; kind: GraphNode["kind"] | "tag"; tags: string[]; inbound: number }
+export interface ViewNode { id: string; title: string; kind: GraphNode["kind"] | "tag"; tags: string[]; inbound: number; color: string | null }
 export interface ViewGraph { nodes: ViewNode[]; edges: DrawEdge[] }
 
 function matches(n: GraphNode, s: Search, content: Set<string> | null): boolean {
@@ -83,6 +111,16 @@ function matches(n: GraphNode, s: Search, content: Set<string> | null): boolean 
   if (s.files.some((f) => !name.includes(f))) return false;
   if (s.words.length === 0 || content?.has(n.id)) return true;
   return s.words.every((w) => title.includes(w) || path.includes(w));
+}
+
+/** The first group whose query matches, as Obsidian's higher group wins. Words match the title and path only. */
+export function groupColor(n: GraphNode, groups: ColorGroup[]): string | null {
+  for (const g of groups) {
+    const q = parseSearch(g.query);
+    if (Object.values(q).every((terms) => terms.length === 0)) continue;
+    if (matches(n, q, null)) return hexColor(g.color.rgb);
+  }
+  return null;
 }
 
 /** Nodes within `depth` links of `center`, following links either way. */
@@ -123,7 +161,7 @@ export function filterGraph(
   let nodes: ViewNode[] = g.nodes
     .filter((n) => (n.kind !== "attachment" || s.showAttachments) && (n.kind !== "unresolved" || !s.hideUnresolved))
     .filter((n) => !searching || matches(n, search, content))
-    .map((n) => ({ ...n, inbound: 0 }));
+    .map((n) => ({ ...n, inbound: 0, color: groupColor(n, s.colorGroups) }));
   const kept = new Set(nodes.map((n) => n.id));
   const drawn = mergeEdges(g.edges, semantic, center ? s.showSemanticLocal : s.showSemantic);
   let edges = drawn.filter((e) => kept.has(e.source) && kept.has(e.target));
@@ -135,7 +173,7 @@ export function filterGraph(
         edges.push({ source: n.id, target: `#${t}`, kind: "link", weight: 1 });
       }
     }
-    for (const t of [...tags].sort()) nodes.push({ id: `#${t}`, title: `#${t}`, kind: "tag", tags: [], inbound: 0 });
+    for (const t of [...tags].sort()) nodes.push({ id: `#${t}`, title: `#${t}`, kind: "tag", tags: [], inbound: 0, color: null });
   }
   if (center) {
     const near = neighbourhood(edges, center, s.localDepth);

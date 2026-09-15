@@ -11,10 +11,23 @@ passage vector) each fetch `limit × 3` candidates. Reciprocal rank fusion with
 snippet. With no model loaded the full-text branch answers alone, which is why
 search works while the model downloads.
 
-Passages are the body split on headings, then on paragraphs, at most 1 200
-characters, the heading path prepended before embedding. A vector is keyed by
-the hash of that text, so an unchanged passage in a renamed or re-saved note
-keeps it.
+A passage is the note's body after the frontmatter, truncated at the end at
+1 200 characters on a whitespace boundary: one vector per note, since a
+note's important part is at its beginning and everything downstream reasons
+per note. A vector is keyed by the hash of that text, so an unchanged body in
+a renamed or re-saved note keeps it.
+
+Because the passage is the whole note, a hit has no position inside it, and
+neither branch gives one: the full-text snippet marks the phrase it matched
+but its line is the note's body line too. So a result opens at the note's
+first body line and carries no heading breadcrumb, and a hit only the vector
+branch found shows a lead of the body, cut to 200 characters, rather than a
+marked phrase. A finer position would have to come from a second splitter,
+and everything downstream reasons per note.
+
+A `Similar` row shows the same lead, not the passage: the whole body in a
+one-line row is 1 200 characters of nowrap text and reads the same for every
+note.
 
 **The floor.** A cosine below `similarity_floor` (0.83) says nothing, and the
 hit is a stranger. This is not in the spec; it is here because the model needs

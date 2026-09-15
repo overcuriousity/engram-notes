@@ -29,12 +29,12 @@ export interface Unresolved { target: string; count: number }
 export interface TagCount { tag: string; count: number }
 export interface PropertyCount { key: string; count: number }
 export interface Hit {
-  path: string; title: string; snippet: string; heading: string | null; line: number;
+  path: string; title: string; snippet: string; line: number;
   similarity: number | null; score: number; past_divider: boolean; primed: boolean;
 }
 export interface Associated { path: string; title: string; via: string; cue: string | null; strength: number }
 export interface SearchResults { hits: Hit[]; associated: Associated[] }
-export interface SimilarNote { path: string; title: string; heading: string; text: string; similarity: number }
+export interface SimilarNote { path: string; title: string; text: string; similarity: number }
 export interface Related { associated: Associated[]; similar: SimilarNote[]; suggested: SimilarNote[] }
 export interface SemanticEdge { source: string; target: string; weight: number; kind: "assoc" | "similar" }
 export interface EmbedStatus { model: string | null; state: "off" | "loading" | "ready" | "error"; pending: number; error: string | null }
@@ -97,6 +97,13 @@ export const rescan = () => invoke<RebuildStats>("rescan");
 export const attachmentPath = (path: string) => invoke<string>("attachment_path", { path });
 export const openExternal = (path: string) => invoke<void>("open_external", { path });
 export const anchorLine = (path: string, fragment: string) => invoke<number | null>("anchor_line", { path, fragment });
+export interface LinkCandidate { path: string; title: string; kind: "text" | "meaning"; primed: boolean }
+export interface Block { kind: "heading" | "list" | "paragraph"; first: number; last: number; text: string; heading: string | null }
+export interface Preview { heading: string; text: string }
+export const linkCandidates = (query: string, limit = 20) => invoke<LinkCandidate[]>("link_candidates", { query, limit });
+export const blocks = (path: string) => invoke<Block[]>("blocks", { path });
+export const anchorBlock = (path: string, first: number, last: number) => invoke<string>("anchor_block", { path, first, last });
+export const linkPreview = (path: string, fragment: string | null) => invoke<Preview | null>("link_preview", { path, fragment });
 export const listFolders = () => invoke<string[]>("list_folders");
 export const graph = () => invoke<Graph>("graph");
 export const getGraphConfig = () => invoke<Record<string, unknown>>("get_graph_config");

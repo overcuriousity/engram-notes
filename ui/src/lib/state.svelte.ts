@@ -25,7 +25,10 @@ class AppStateStore {
   titles = $state<[string, string][]>([]);
   showLeft = $state(true);
   showRight = $state(true);
-  palette = $state<"none" | "files" | "commands" | "search" | "templates">("none");
+  palette = $state<"none" | "files" | "commands" | "search" | "templates" | "link">("none");
+  // The passage picker's request: where the link goes, what it searches, and
+  // whether it replaces the selection (the alias came from it) or the typed `[[^^`.
+  link = $state<{ pane: number; path: string; query: string; alias: string | null; replace: boolean } | null>(null);
   settings = $state(false);
   rightPane = $state<"note" | "props" | "all" | "related">("note");
   watching = $state(true);
@@ -42,6 +45,8 @@ class AppStateStore {
   // at its cursor. `replace` is a template taking the place of a selection.
   insertion = $state<{ pane: number; path: string; text: string; replace: boolean; n: number } | null>(null);
   private nextId = 2;
+  // What `open` subscribed to, so a second vault does not hear the first one's events.
+  private unlisten: (() => void)[] = [];
 
   get pane(): Pane {
     return L.findPane(this.layout, this.activePane) ?? L.panes(this.layout)[0];
@@ -63,6 +68,8 @@ class AppStateStore {
 
   async open(root: string) {
     const info = await api.openVault(root);
+    // The backend has moved on; what the window shows of the old vault goes with it.
+    this.clear();
     this.root = info.root;
     this.config = info.config;
     if (info.index_recreated) this.say("The index was damaged and has been rebuilt.");
@@ -71,17 +78,46 @@ class AppStateStore {
     await this.refresh();
     await this.loadSnippets();
     await this.restore(await api.getWorkspace());
-    await api.onIndexChanged(() => this.refresh());
-    await api.onFileChanged((c) => this.externalChange(c));
+    this.unlisten.push(
+      await api.onIndexChanged(() => this.refresh()),
+      await api.onFileChanged((c) => this.externalChange(c)),
+    );
     this.embed = await api.embedStatus();
-    await api.onEmbedStatus((s) => (this.embed = s));
-    await api.onWatchFailed((msg) => {
-      if (this.watching) this.say(`File watching stopped: ${msg}. Changes are read when the window gains focus.`);
-      this.watching = false;
-    });
-    await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused && !this.watching) this.rescan().catch((e) => this.say(api.errorMessage(e)));
-    });
+    this.unlisten.push(
+      await api.onEmbedStatus((s) => (this.embed = s)),
+      await api.onWatchFailed((msg) => {
+        if (this.watching) this.say(`File watching stopped: ${msg}. Changes are read when the window gains focus.`);
+        this.watching = false;
+      }),
+      await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+        if (focused && !this.watching) this.rescan().catch((e) => this.say(api.errorMessage(e)));
+      }),
+    );
+  }
+
+  /** Obsidian's "open another vault", in this window: unsaved notes land on disk first. */
+  async switchVault(root: string) {
+    for (const d of Object.values(this.docs)) await this.save(d);
+    await this.open(root);
+  }
+
+  private clear() {
+    for (const off of this.unlisten.splice(0)) off();
+    this.docs = {};
+    this.layout = { kind: "pane", id: 1, tabs: [], active: -1 };
+    this.activePane = 1;
+    this.nextId = 2;
+    this.files = [];
+    this.folders = [];
+    this.titles = [];
+    this.templates = [];
+    this.snippets = [];
+    this.lastNote = null;
+    this.jump = null;
+    this.insertion = null;
+    this.link = null;
+    this.palette = "none";
+    this.settings = false;
   }
 
   // The foundation's `{tabs, active}` still opens, as one pane.
@@ -183,6 +219,29 @@ class AppStateStore {
 
   insertAtCursor(pane: number, path: string, text: string, replace = false) {
     this.insertion = { pane, path, text, replace, n: (this.insertion?.n ?? 0) + 1 };
+  }
+
+  /** Put an open buffer on disk before the app writes that file itself, so the
+   *  write lands on the text the user can see. False when the save failed,
+   *  which has already said why. */
+  async flush(path: string): Promise<boolean> {
+    const doc = this.docs[path];
+    if (!doc || doc.text === doc.savedText) return true;
+    await this.save(doc);
+    return doc.text === doc.savedText;
+  }
+
+  /** Take a write the app made itself into the open buffer. Without this the
+   *  watcher finds a buffer that predates the write and calls it a conflict. */
+  async adopt(path: string) {
+    const doc = this.docs[path];
+    if (!doc) return;
+    const n = await api.readNote(path);
+    // Typed since the flush: leave it to the watcher rather than drop the edit.
+    if (doc.text !== doc.savedText) return;
+    doc.text = n.text;
+    doc.savedText = n.text;
+    doc.mtime_ms = n.mtime_ms;
   }
 
   activate(paneId: number, index: number) {

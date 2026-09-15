@@ -4,13 +4,14 @@ pub mod folds;
 pub mod fts;
 pub mod query;
 pub mod rebuild;
+pub use rebuild::line_of_body;
 pub mod resolve;
 
 use crate::{Error, Result};
 use rusqlite::{Connection, ErrorCode};
 use std::path::{Path, PathBuf};
 
-pub const SCHEMA_VERSION: &str = "4";
+pub const SCHEMA_VERSION: &str = "5";
 const SCHEMA: &str = include_str!("schema.sql");
 
 pub struct Index {

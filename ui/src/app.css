@@ -147,8 +147,15 @@ input[type="checkbox"]:checked { border-color: var(--accent); background: var(--
 .graph-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--fg-muted); pointer-events: none; }
 .graph-controls { position: absolute; top: 8px; right: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; max-height: calc(100% - 16px); overflow: auto; }
 .graph-controls.open { width: 240px; padding: 0 12px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
-.graph-toggle { float: right; color: var(--fg-muted); padding: 4px 6px; }
-.graph-controls.open .graph-toggle { margin-right: -8px; }
+.graph-toggle { float: right; width: 28px; height: 28px; }
+.graph-controls.open .graph-toggle { margin: 6px -8px 0 0; }
+.graph-controls .group { display: flex; align-items: center; gap: 4px; margin: 4px 0; }
+.graph-controls .group input:not([type]) { flex: 1; min-width: 0; }
+.graph-controls input[type="color"] { flex: none; width: 28px; height: 26px; padding: 2px; cursor: pointer; }
+.graph-controls input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.graph-controls input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+.graph-controls .pick { border: 1px solid var(--border); border-radius: var(--radius); padding: 2px 10px; font-size: var(--font-ui-smaller); color: var(--fg-muted); }
+.graph-controls .pick:hover { background: var(--bg-3); color: var(--fg); }
 .graph-controls h4 { margin: 12px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-muted); font-weight: 500; }
 .graph-controls label { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
 .graph-controls label.slider { flex-direction: column; align-items: stretch; gap: 0; }
@@ -223,21 +230,38 @@ select option { background: var(--bg); color: var(--fg); }
 .tabs .newtab { border-right: none; padding: 2px 8px; align-self: center; }
 
 /* The ribbon starts under the band; its corner carries the band's colour. */
-.ribbon { position: relative; margin-top: var(--header-height); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; background: var(--bg-2); border-right: 1px solid var(--border); }
-.ribbon .corner { position: absolute; top: calc(var(--header-height) * -1); left: 0; width: 100%; height: var(--header-height); border-radius: 0; background: var(--bg-2); border-bottom: 1px solid var(--border); z-index: 5; }
-.ribbon .icon { width: 30px; height: 30px; display: grid; place-items: center; font-size: 15px; }
+.ribbon { position: relative; margin-top: var(--header-height); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; background: var(--bg-2); border-right: 1px solid var(--border); }
+.ribbon .icon { width: 32px; height: 32px; display: grid; place-items: center; }
+/* Declared after `.ribbon .icon`: the corner is the whole 44x40 cell, not a 32px button
+   floating in it, so the band's colour and rule reach the explorer's edge. */
+.ribbon .icon.corner { position: absolute; top: calc(var(--header-height) * -1); left: 0; width: 100%; height: var(--header-height); border-radius: 0; background: var(--bg-2); border-bottom: 1px solid var(--border); z-index: 5; }
+.ribbon .icon.corner:hover { background: var(--bg-3); }
 .ribbon .spacer { flex: 1; }
+.menu.vaults { min-width: 240px; max-width: 360px; padding: 4px 0; }
+.menu.vaults .pane-title { padding: 4px 12px 2px; }
+.menu.vaults button { display: flex; align-items: center; gap: 8px; padding: 6px 12px; }
+.menu.vaults button.active { background: var(--accent-bg); }
+.menu.vaults .vname { font-weight: 500; white-space: nowrap; }
+.menu.vaults .vpath { color: var(--fg-muted); font-size: var(--font-ui-smaller); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.menu.vaults hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 .countrow { display: flex; justify-content: space-between; gap: 8px; padding: 3px 12px; font-size: var(--font-ui-small); }
 .countrow:hover { background: var(--bg-3); }
 .countrow .n { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
-.settings { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,.3); width: 460px; max-height: 76vh; overflow: auto; padding: 4px 0 12px; }
-.settings label { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 3px 14px; font-size: var(--font-ui-small); }
-.settings input[type="number"], .settings select, .settings input:not([type]) { width: 200px; }
-.settings .pick { border: 1px solid var(--border); border-radius: var(--radius); padding: 2px 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.settings .row { display: flex; justify-content: flex-end; padding: 8px 14px 0; }
-.settings .hint { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 3px 14px; font-size: var(--font-ui-small); }
-.settings .hint.muted { color: var(--fg-muted); font-size: var(--font-ui-smaller); }
-.settings .hint code { font-family: var(--font-mono); font-size: 11px; }
+/* Obsidian's settings: one row per setting, name and description left, the control right. */
+.settings { display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,.3); width: 620px; max-height: 80vh; font-size: var(--font-ui-small); }
+.settings-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 10px 20px; font-size: 15px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.settings-body { overflow: auto; padding: 4px 20px 20px; }
+.settings h3 { margin: 22px 0 6px; font-size: 15px; font-weight: 600; }
+.settings h3:first-child { margin-top: 12px; }
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 10px 0; border-top: 1px solid var(--border); }
+.setting .info { min-width: 0; }
+.setting .name { font-weight: 500; }
+.setting .desc { color: var(--fg-muted); font-size: var(--font-ui-smaller); line-height: 1.4; margin-top: 2px; }
+.setting .control { display: flex; align-items: center; gap: 6px; flex: none; }
+.settings input:not([type="checkbox"]), .settings select { width: 200px; }
+.settings input[type="checkbox"] { width: 16px; height: 16px; }
+.settings .pick { border: 1px solid var(--border); border-radius: var(--radius); padding: 3px 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings .pick:hover { background: var(--bg-3); }
 
 /* An edge resize takes the cursor from whatever it is hovering. */
 html[data-cursor="ns-resize"] * { cursor: ns-resize !important; }

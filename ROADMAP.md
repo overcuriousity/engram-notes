@@ -105,7 +105,7 @@ lines 63–67 in the real window.
 - 🔶 Idempotent: the output imports to itself, and a second run over the
   vault writes nothing.
 
-## 0.5 — Linking ⬜
+## 0.5 — Linking 🔶
 
 The primary engram surface. Completion inside `[[…]]` becomes hybrid —
 substring for what you know exactly, meaning for what you can only paraphrase.
@@ -113,6 +113,16 @@ A text-level link is picked from **passages**, hybrid and reranked, and written
 in Obsidian's own form, `[[Note#^id|your words]]`; the identifier is never the
 thing on screen. The trade is stated: a stable link to a line in a folder of
 files requires an anchor in the target file, and this does what Obsidian does.
+In review; what remains is smoke lines 69–75 in the real window
+(`docs/superpowers/specs/2026-09-15-linking-design.md`).
+
+- 🔶 One passage per note; `[[` completion lists spelling matches, then
+  meaning matches marked as such, primed by memory.
+- 🔶 *Link: to a passage* (Ctrl+Shift+K) and `[[^^`: notes, then blocks;
+  `[[Note#^id|words]]`, the anchor written only then, a heading target
+  written without one; an existing id reused.
+- 🔶 Hovering a link shows the target passage; the id is never on screen.
+- ⬜ The reranker: ships with 0.6 and the bundled models.
 
 ## 0.6 — Out of the box ⬜
 

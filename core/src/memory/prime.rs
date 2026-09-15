@@ -77,7 +77,6 @@ mod tests {
                 path: (*p).into(),
                 title: (*p).into(),
                 snippet: String::new(),
-                heading: None,
                 line: 1,
                 similarity: None,
                 score: 0.0,
