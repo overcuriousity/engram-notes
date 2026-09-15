@@ -74,7 +74,7 @@ mod tests {
         let p = split(&word);
         assert_eq!(p.len(), 1);
         let n = p[0].text.chars().count();
-        assert!(n <= MAX_CHARS && n >= MAX_CHARS - 6, "{n}");
+        assert!((MAX_CHARS - 6..=MAX_CHARS).contains(&n), "{n}");
         assert!(p[0].text.ends_with("word"));
     }
 
