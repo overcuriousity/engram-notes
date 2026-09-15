@@ -188,6 +188,29 @@ class AppStateStore {
     this.insertion = { pane, path, text, replace, n: (this.insertion?.n ?? 0) + 1 };
   }
 
+  /** Put an open buffer on disk before the app writes that file itself, so the
+   *  write lands on the text the user can see. False when the save failed,
+   *  which has already said why. */
+  async flush(path: string): Promise<boolean> {
+    const doc = this.docs[path];
+    if (!doc || doc.text === doc.savedText) return true;
+    await this.save(doc);
+    return doc.text === doc.savedText;
+  }
+
+  /** Take a write the app made itself into the open buffer. Without this the
+   *  watcher finds a buffer that predates the write and calls it a conflict. */
+  async adopt(path: string) {
+    const doc = this.docs[path];
+    if (!doc) return;
+    const n = await api.readNote(path);
+    // Typed since the flush: leave it to the watcher rather than drop the edit.
+    if (doc.text !== doc.savedText) return;
+    doc.text = n.text;
+    doc.savedText = n.text;
+    doc.mtime_ms = n.mtime_ms;
+  }
+
   activate(paneId: number, index: number) {
     const p = L.findPane(this.layout, paneId);
     if (!p) return;

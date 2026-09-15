@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { app } from "../lib/state.svelte";
   import { anchorBlock, blocks as fetchBlocks, errorMessage, linkCandidates, type Block, type LinkCandidate } from "../lib/api";
   import { firstLine, linkText } from "../lib/linkpicker";
@@ -31,6 +32,10 @@
   export async function pickNote(i: number) {
     const c = notes[i];
     if (!c) return;
+    // Blocks are read from disk, so an open buffer of the target goes there
+    // first; otherwise the picker lists lines the user cannot see and the
+    // anchor is written under their edit.
+    if (!(await app.flush(c.path))) return;
     try {
       list = await fetchBlocks(c.path);
     } catch (e) {
@@ -48,8 +53,16 @@
     const b = list[i];
     const req = app.link;
     if (!b || !chosen || !req) return;
+    if (b.kind !== "heading" && !(await app.flush(chosen.path))) return;
     try {
-      const id = b.kind === "heading" ? null : await anchorBlock(chosen.path, b.first, b.last);
+      let id: string | null = null;
+      if (b.kind !== "heading") {
+        id = await anchorBlock(chosen.path, b.first, b.last);
+        // The anchor is on disk; the buffer takes it before the link goes in,
+        // so the insert builds on the anchored text and not on what preceded it.
+        await app.adopt(chosen.path);
+        await tick();
+      }
       app.insertAtCursor(req.pane, req.path, linkText(chosen.path, b, id, req.alias), req.replace);
       onDone();
     } catch (e) {
