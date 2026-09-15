@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Graph } from "./api";
-import { DEFAULTS, easeStep, filterGraph, fitView, hitRadius, labelAlpha, parseSearch, radius, readSettings, searchWords, type GraphSettings, type ViewGraph } from "./graph";
+import { DEFAULTS, easeStep, filterGraph, fitView, groupColor, hexColor, hitRadius, labelAlpha, parseSearch, radius, readColorGroups, readSettings, rgbInt, searchWords, type GraphSettings, type ViewGraph } from "./graph";
 
 const g: Graph = {
   nodes: [
@@ -74,7 +74,7 @@ describe("graph filters", () => {
   });
 
   it("draws small nodes that grow slowly with links", () => {
-    const n = (inbound: number) => ({ id: "a", title: "a", kind: "note" as const, tags: [], inbound });
+    const n = (inbound: number) => ({ id: "a", title: "a", kind: "note" as const, tags: [], inbound, color: null });
     expect(radius(n(0), DEFAULTS)).toBeCloseTo(2.5);
     expect(radius(n(4), DEFAULTS)).toBeCloseTo(5.5);
     // A hub is bigger, not enormous.
@@ -134,5 +134,36 @@ describe("graph filters", () => {
     for (let i = 0; i < 200; i++) v = easeStep(v, { x: 100, y: 0, k: 2 }).view;
     expect(v.x).toBeCloseTo(100, 3);
     expect(v.k).toBeCloseTo(2, 3);
+  });
+});
+
+describe("colour groups", () => {
+  const red = { a: 1, rgb: 0xff0000 };
+  const blue = { a: 1, rgb: 0x0000ff };
+
+  it("colours a node by the first group that matches it", () => {
+    const groups = [{ query: "tag:#proj", color: red }, { query: "file:B", color: blue }, { query: "", color: blue }];
+    const v = filterGraph(g, s({ colorGroups: groups }), null);
+    const color = (id: string) => v.nodes.find((n) => n.id === id)!.color;
+    expect(color("A.md")).toBe("#ff0000");
+    expect(color("B.md")).toBe("#ff0000");
+    expect(color("C.md")).toBeNull();
+    expect(groupColor(g.nodes[2], [{ query: "path:c", color: blue }])).toBe("#0000ff");
+  });
+
+  it("reads Obsidian's colorGroups and drops what is malformed", () => {
+    const raw = { colorGroups: [{ query: "tag:x", color: { a: 1, rgb: 16711680 } }, { query: 3 }, null, { query: "y", color: { rgb: 0x1000000 + 5 } }] };
+    expect(readColorGroups(raw.colorGroups)).toEqual([
+      { query: "tag:x", color: { a: 1, rgb: 16711680 } },
+      { query: "y", color: { a: 1, rgb: 5 } },
+    ]);
+    expect(readSettings({ colorGroups: "nope" }).colorGroups).toEqual([]);
+    expect(readSettings(raw).colorGroups).toHaveLength(2);
+  });
+
+  it("round-trips Obsidian's packed rgb through a colour input", () => {
+    expect(hexColor(0x00ff7f)).toBe("#00ff7f");
+    expect(rgbInt("#00ff7f")).toBe(0x00ff7f);
+    expect(rgbInt("junk")).toBe(0);
   });
 });
