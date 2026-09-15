@@ -39,6 +39,20 @@ export async function insertTemplate() {
   app.palette = "templates";
 }
 
+/** The passage picker. `replace` when the inserted link takes the place of the selection or the typed `[[^^…`. */
+export function openLinkPicker(query: string, alias: string | null, replace: boolean) {
+  const into = templateTarget();
+  if (!into) return app.say("Open a note in an editing mode to link a passage.");
+  app.link = { ...into, query, alias, replace };
+  app.palette = "link";
+}
+
+// With a selection, its words are both the query and the alias, as the spec's gesture says.
+export function linkPassage() {
+  const sel = window.getSelection()?.toString().trim() ?? "";
+  openLinkPicker(sel, sel || null, sel.length > 0);
+}
+
 /** Two folders, then the report opens. Journals land in the vault's daily folder, where Ctrl+D looks. */
 export async function importLogseq() {
   const source = await open({ directory: true, title: "Choose the Logseq graph folder" });
@@ -72,6 +86,7 @@ export const defaults: Command[] = [
   { id: "local-graph", name: "Open local graph", hotkey: "", run: () => app.openNote("graph:local") },
   { id: "daily", name: "Open today's daily note", hotkey: "Ctrl+D", run: async () => { const p = await dailyNote(); await app.refresh(); await app.openNote(p); } },
   { id: "insert-template", name: "Templates: Insert template", hotkey: "", run: () => insertTemplate() },
+  { id: "link-passage", name: "Link: to a passage", hotkey: "Ctrl+Shift+K", run: () => linkPassage() },
   { id: "import-logseq", name: "Import: Logseq graph", hotkey: "", run: () => importLogseq() },
   { id: "close-tab", name: "Close current tab", hotkey: "Ctrl+W", run: () => { const p = app.pane; if (p.active >= 0) app.closeTab(p.id, p.active); } },
   { id: "toggle-mode", name: "Toggle live preview / source", hotkey: "Ctrl+E", run: () => { const t = app.activeTab; if (t) app.setMode(app.pane.id, t.path, t.mode === "source" ? "live" : "source"); } },

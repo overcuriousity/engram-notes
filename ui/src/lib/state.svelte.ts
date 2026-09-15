@@ -25,7 +25,10 @@ class AppStateStore {
   titles = $state<[string, string][]>([]);
   showLeft = $state(true);
   showRight = $state(true);
-  palette = $state<"none" | "files" | "commands" | "search" | "templates">("none");
+  palette = $state<"none" | "files" | "commands" | "search" | "templates" | "link">("none");
+  // The passage picker's request: where the link goes, what it searches, and
+  // whether it replaces the selection (the alias came from it) or the typed `[[^^`.
+  link = $state<{ pane: number; path: string; query: string; alias: string | null; replace: boolean } | null>(null);
   settings = $state(false);
   rightPane = $state<"note" | "props" | "all" | "related">("note");
   watching = $state(true);
