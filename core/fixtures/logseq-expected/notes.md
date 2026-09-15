@@ -1,0 +1,3 @@
+- See [[Alpha#^64f1a2b3]] and ((64f1a2b3-0000-4000-8000-00000000dead)).
+- ![[Alpha#^64f1a2b30000]]
+- ![[Project/Alpha]]

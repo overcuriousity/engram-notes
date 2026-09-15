@@ -40,5 +40,6 @@ describe("commands", () => {
     expect(ids).toContain("memory-forget");
     expect(ids).toContain("model-dir");
     expect(ids).toContain("insert-template");
+    expect(ids).toContain("import-logseq");
   });
 });

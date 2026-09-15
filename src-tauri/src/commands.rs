@@ -4,6 +4,7 @@ use crate::state::{AppState, Open};
 use engram_core::bases::{SortKey, Table};
 use engram_core::config::{self, AppConfig, Snippet};
 use engram_core::graph::{Graph, SemanticEdge};
+use engram_core::import::logseq::{self as logseq_import, Summary as ImportSummary};
 use engram_core::index::query::{LinkRow, PropertyCount, TagCount, Unresolved};
 use engram_core::index::{Index, RebuildStats};
 use engram_core::memory::{EventKind, related::Related};
@@ -85,6 +86,7 @@ pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdRe
         .map_err(|e| CommandError {
             code: "io",
             message: e.to_string(),
+            report: None,
         })?;
     let (mut index, index_recreated) = Index::open_or_recreate(&config::index_path(&vault)?)?;
     let stats = index.rebuild(&vault)?;
@@ -154,6 +156,7 @@ pub fn open_external(app: AppHandle, state: State<AppState>, path: String) -> Cm
         .map_err(|e| CommandError {
             code: "io",
             message: e.to_string(),
+            report: None,
         })
 }
 
@@ -577,6 +580,62 @@ pub fn snippets(state: State<AppState>) -> CmdResult<Vec<Snippet>> {
     with_open(&state, |o| Ok(config::snippets(&o.vault)?))
 }
 
+/// `dir` is an absolute folder from the dialog; it has to be inside the vault.
+fn inside_vault(vault: &Vault, dir: &str) -> CmdResult<String> {
+    let abs = std::path::Path::new(dir)
+        .canonicalize()
+        .map_err(|_| CommandError {
+            code: "not_found",
+            message: format!("{dir}: no such folder"),
+            report: None,
+        })?;
+    let rel = abs.strip_prefix(vault.root()).map_err(|_| CommandError {
+        code: "config",
+        message: "the destination must be a folder inside the vault".into(),
+        report: None,
+    })?;
+    Ok(rel.to_string_lossy().replace('\\', "/"))
+}
+
+/// `dir` is the graph from the dialog; the importer reads it as it is on
+/// disk, so it can be neither the vault nor a part of it nor its parent.
+fn outside_vault(vault: &Vault, dir: &str) -> CmdResult<std::path::PathBuf> {
+    let abs = std::path::Path::new(dir)
+        .canonicalize()
+        .map_err(|_| CommandError {
+            code: "not_found",
+            message: format!("{dir}: no such folder"),
+            report: None,
+        })?;
+    if abs.starts_with(vault.root()) || vault.root().starts_with(&abs) {
+        return Err(CommandError {
+            code: "config",
+            message: "the graph must be a folder outside the vault".into(),
+            report: None,
+        });
+    }
+    Ok(abs)
+}
+
+#[tauri::command]
+pub fn import_logseq(
+    state: State<AppState>,
+    source: String,
+    dest: String,
+) -> CmdResult<ImportSummary> {
+    with_open(&state, |o| {
+        let rel = inside_vault(&o.vault, &dest)?;
+        let graph = outside_vault(&o.vault, &source)?;
+        // An import that failed still wrote pages, and they are only findable
+        // once the index has seen them.
+        let out = logseq_import::run(&o.vault, &o.config, &graph, &rel);
+        let rebuilt = o.index.rebuild(&o.vault);
+        let summary = out?;
+        rebuilt?;
+        Ok(summary)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -668,6 +727,24 @@ mod tests {
     }
 
     #[test]
+    fn a_graph_inside_the_vault_is_refused() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("In/pages")).unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let inside = d.path().join("In").to_string_lossy().into_owned();
+        let err = outside_vault(&v, &inside).unwrap_err();
+        assert_eq!(err.code, "config");
+        let root = d.path().to_string_lossy().into_owned();
+        assert_eq!(outside_vault(&v, &root).unwrap_err().code, "config");
+        let outer = tempfile::tempdir().unwrap();
+        assert!(outside_vault(&v, &outer.path().to_string_lossy()).is_ok());
+        assert_eq!(
+            outside_vault(&v, "/no/such/folder").unwrap_err().code,
+            "not_found"
+        );
+    }
+
+    #[test]
     fn graph_and_base_table() {
         let d = tempfile::tempdir().unwrap();
         std::fs::write(d.path().join("A.md"), "---\ns: 1\n---\n[[Ghost]]").unwrap();
@@ -751,5 +828,34 @@ mod tests {
         let kind: engram_core::memory::EventKind =
             serde_json::from_str("\"open_from_search\"").unwrap();
         assert_eq!(kind, engram_core::memory::EventKind::OpenFromSearch);
+    }
+
+    #[test]
+    fn import_summary() {
+        let s = ImportSummary {
+            pages: 2,
+            journals: 1,
+            assets: 0,
+            skipped: 0,
+            unmapped: 3,
+            report: "import-report.md".into(),
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["report"], "import-report.md");
+        assert_eq!(v["unmapped"], 3);
+    }
+
+    #[test]
+    fn destination_outside_the_vault_is_refused() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("v");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        let v = Vault::open(&root).unwrap();
+        assert!(inside_vault(&v, d.path().to_str().unwrap()).is_err());
+        assert_eq!(inside_vault(&v, root.to_str().unwrap()).unwrap(), "");
+        assert_eq!(
+            inside_vault(&v, root.join("sub").to_str().unwrap()).unwrap(),
+            "sub"
+        );
     }
 }

@@ -9,6 +9,9 @@ open licence from Logseq, and the semantic search and memory concepts from
 [engram](https://github.com/overcuriousity/engram), reimplemented locally so
 nothing runs but the app.
 
+Coming from Logseq: one command imports a graph and reports what it could
+not map ([docs/import.md](docs/import.md)).
+
 Status: in development, no tagged release yet. See [the roadmap](ROADMAP.md)
 and the designs it points to.
 

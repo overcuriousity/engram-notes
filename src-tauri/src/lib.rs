@@ -45,6 +45,7 @@ pub fn run() {
             commands::templates,
             commands::render_template,
             commands::snippets,
+            commands::import_logseq,
             commands::rescan,
             commands::anchor_line,
             commands::attachment_path,

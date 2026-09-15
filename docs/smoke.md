@@ -97,3 +97,16 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
     same selection: the template takes its place.
 62. Open one note in two panes side by side, put the cursor in each, and
     insert a template: it goes into the pane that was active, not the other.
+63. *Import: Logseq graph* on a real graph: pick the graph, pick the vault
+    root; the report opens, and the explorer shows the pages and the journals
+    in the daily folder.
+64. A page that had `id::` blocks: the block ends in `^…`, and a page that
+    referenced it shows a link that opens the block.
+65. `TODO` and `DONE` items show as checkboxes; a `DOING` item is an unchecked
+    box with the word.
+66. A namespaced page `a/b` is a folder `a` with `b.md`; `[[a/b]]` links to it.
+67. Run the import a second time into the same folder: nothing is written,
+    the first report is still there as it was, and the second one
+    (`import-report-1.md`) lists every file as already in the vault.
+68. Start the import again and pick a folder inside the vault as the graph:
+    it is refused, and nothing is written.

@@ -22,6 +22,14 @@ pub enum Error {
     Base(String),
     #[error("embedding error: {0}")]
     Embed(String),
+    /// An import that stopped part-way. The report is already in the vault and
+    /// names what landed, so the error carries the path to it.
+    #[error("the import stopped: {source}")]
+    Import {
+        report: String,
+        #[source]
+        source: Box<Error>,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

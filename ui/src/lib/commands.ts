@@ -1,6 +1,7 @@
 import { app } from "./state.svelte";
 import { open } from "@tauri-apps/plugin-dialog";
-import { dailyNote, createNote, forgetMemory, setConfig, setModelDir, templates } from "./api";
+import { dailyNote, createNote, errorMessage, forgetMemory, importLogseq as importLogseqCmd, setConfig, setModelDir, templates } from "./api";
+import type { CommandError } from "./api";
 import { freeName } from "./tree";
 import { fileKind } from "./files";
 
@@ -38,6 +39,29 @@ export async function insertTemplate() {
   app.palette = "templates";
 }
 
+/** Two folders, then the report opens. Journals land in the vault's daily folder, where Ctrl+D looks. */
+export async function importLogseq() {
+  const source = await open({ directory: true, title: "Choose the Logseq graph folder" });
+  if (typeof source !== "string") return;
+  const dest = await open({ directory: true, defaultPath: app.root ?? undefined, title: "Choose the folder in this vault to import into" });
+  if (typeof dest !== "string") return;
+  try {
+    const s = await importLogseqCmd(source, dest);
+    await app.refresh();
+    await app.openNote(s.report);
+    const rest = s.unmapped ? `${s.unmapped} things to look at in the report.` : "Everything was mapped.";
+    app.say(`Imported ${s.pages} pages and ${s.journals} journals. ${rest}`);
+  } catch (e) {
+    // An import stops on the first write it cannot do, so what landed before
+    // it and the report that names it are already in the vault; the error
+    // says where, because the report is not always `import-report.md`.
+    await app.refresh();
+    const report = (e as CommandError)?.report;
+    if (report && app.files.some((f) => f.path === report)) await app.openNote(report);
+    app.say(errorMessage(e));
+  }
+}
+
 export const defaults: Command[] = [
   { id: "palette", name: "Open command palette", hotkey: "Ctrl+P", run: () => (app.palette = "commands") },
   { id: "switcher", name: "Quick switcher", hotkey: "Ctrl+O", run: () => (app.palette = "files") },
@@ -48,6 +72,7 @@ export const defaults: Command[] = [
   { id: "local-graph", name: "Open local graph", hotkey: "", run: () => app.openNote("graph:local") },
   { id: "daily", name: "Open today's daily note", hotkey: "Ctrl+D", run: async () => { const p = await dailyNote(); await app.refresh(); await app.openNote(p); } },
   { id: "insert-template", name: "Templates: Insert template", hotkey: "", run: () => insertTemplate() },
+  { id: "import-logseq", name: "Import: Logseq graph", hotkey: "", run: () => importLogseq() },
   { id: "close-tab", name: "Close current tab", hotkey: "Ctrl+W", run: () => { const p = app.pane; if (p.active >= 0) app.closeTab(p.id, p.active); } },
   { id: "toggle-mode", name: "Toggle live preview / source", hotkey: "Ctrl+E", run: () => { const t = app.activeTab; if (t) app.setMode(app.pane.id, t.path, t.mode === "source" ? "live" : "source"); } },
   { id: "toggle-reading", name: "Toggle reading view", hotkey: "Ctrl+Shift+E", run: () => { const t = app.activeTab; if (t) app.setMode(app.pane.id, t.path, t.mode === "reading" ? "live" : "reading"); } },
