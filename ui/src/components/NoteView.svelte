@@ -5,6 +5,7 @@
   import { app } from "../lib/state.svelte";
   import { findPane } from "../lib/layout";
   import { resolveLink, createNote, anchorLine, tags as apiTags, typing, errorMessage, getFolds, setFolds } from "../lib/api";
+  import { openLinkPicker } from "../lib/commands";
   import Editor from "./Editor.svelte";
   import Reading from "./Reading.svelte";
   import PropertiesBlock from "./PropertiesBlock.svelte";
@@ -115,7 +116,7 @@
         onchange={onChange}
         onblur={() => app.save(doc)}
         onFollow={follow}
-        titles={() => app.titles}
+        onPassageLink={(_f, _t, query) => openLinkPicker(query, null, true)}
         tags={() => tagList}
         {image}
         indent={app.config?.editor.indent ?? 2}

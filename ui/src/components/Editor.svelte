@@ -14,6 +14,7 @@
   import { completions } from "../editor/completions";
   import { foldKeys, foldRestore, foldTransaction, listOnlyFolding, markdownBrackets, outlineFolding, outlineKeymap } from "../editor/outline";
   import { textDiff } from "../lib/textdiff";
+  import { linkCandidates, type LinkCandidate } from "../lib/api";
 
   interface Props {
     text: string;
@@ -26,7 +27,7 @@
     onchange: (t: string) => void;
     onblur: () => void;
     onFollow: (target: string) => void;
-    titles: () => [string, string][];
+    onPassageLink: (from: number, to: number, query: string) => void;
     tags: () => string[];
     image: (target: string) => string | null;
     indent: number;
@@ -34,7 +35,7 @@
     folds: string[] | null;
     onFolds: (keys: string[]) => void;
   }
-  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, titles, tags, image, indent, folds, onFolds }: Props = $props();
+  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, onPassageLink, tags, image, indent, folds, onFolds }: Props = $props();
   let host: HTMLDivElement;
   // State, so effects that need the view run again once it exists.
   let view = $state.raw<EditorView>();
@@ -44,6 +45,15 @@
   // An empty indent unit makes indentUnit throw, which would leave the pane blank.
   const indentSpaces = (n: number) => " ".repeat(Math.min(8, Math.max(1, Math.round(n) || 1)));
   let alive = true;
+  let lastQ: string | null = null;
+  let lastP: Promise<LinkCandidate[]> = Promise.resolve([]);
+  // Keep the last list while the backend answers; 80 ms keeps the typing rhythm.
+  function candidates(q: string): Promise<LinkCandidate[]> {
+    if (q === lastQ) return lastP;
+    lastQ = q;
+    lastP = new Promise((res) => setTimeout(() => linkCandidates(q).then(res, () => res([])), 80));
+    return lastP;
+  }
 
   onMount(() => {
     view = new EditorView({
@@ -66,7 +76,15 @@
           EditorView.lineWrapping,
           indentComp.of(indentUnit.of(indentSpaces(indent))),
           modeComp.of(forMode(mode)),
-          completions(titles, tags),
+          completions(
+            candidates,
+            (from, to, query) => {
+              // Select the typed `[[^^query` so the picker's link replaces it.
+              view?.dispatch({ selection: { anchor: from, head: to } });
+              onPassageLink(from, to, query);
+            },
+            tags,
+          ),
           keymap.of([...closeBracketsKeymap, ...outlineKeymap, ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onchange(u.state.doc.toString());

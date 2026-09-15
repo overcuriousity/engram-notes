@@ -1,17 +1,26 @@
 import { autocompletion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
+import type { LinkCandidate } from "../lib/api";
+import { blockTrigger } from "../lib/linkpicker";
 
-export function wikiCompletion(titles: () => [string, string][]) {
-  return (ctx: CompletionContext): CompletionResult | null => {
+/** Hybrid `[[` completion: the backend lists spelling matches, then meaning matches. */
+export function wikiCompletion(
+  candidates: (q: string) => Promise<LinkCandidate[]>,
+  onBlockSearch: (from: number, to: number, query: string) => void,
+) {
+  return async (ctx: CompletionContext): Promise<CompletionResult | null> => {
+    const lineFrom = ctx.state.doc.lineAt(ctx.pos).from;
+    const trigger = blockTrigger(ctx.state.sliceDoc(lineFrom, ctx.pos));
+    if (trigger) {
+      onBlockSearch(lineFrom + trigger.from, ctx.pos, trigger.query);
+      return null;
+    }
     const m = ctx.matchBefore(/\[\[([^\]|#]*)$/);
     if (!m) return null;
-    const q = m.text.slice(2).toLowerCase();
-    const options = titles()
-      .filter(([p, t]) => !q || t.toLowerCase().includes(q) || p.toLowerCase().includes(q))
-      .slice(0, 50)
-      .map(([p, t]) => {
-        const stem = p.split("/").pop()!.replace(/\.md$/i, "");
-        return { label: t, detail: p, apply: `[[${stem}]]` };
-      });
+    const found = await candidates(m.text.slice(2));
+    const options = found.map((c) => {
+      const stem = c.path.split("/").pop()!.replace(/\.md$/i, "");
+      return { label: c.title, detail: c.kind === "meaning" ? `meaning · ${c.path}` : c.path, apply: `[[${stem}]]` };
+    });
     return { from: m.from, options, filter: false };
   };
 }
@@ -25,5 +34,8 @@ export function tagCompletion(tags: () => string[]) {
   };
 }
 
-export const completions = (titles: () => [string, string][], tags: () => string[]) =>
-  autocompletion({ override: [wikiCompletion(titles), tagCompletion(tags)], icons: false });
+export const completions = (
+  candidates: (q: string) => Promise<LinkCandidate[]>,
+  onBlockSearch: (from: number, to: number, query: string) => void,
+  tags: () => string[],
+) => autocompletion({ override: [wikiCompletion(candidates, onBlockSearch), tagCompletion(tags)], icons: false });
