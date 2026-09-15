@@ -4,6 +4,7 @@ pub mod folds;
 pub mod fts;
 pub mod query;
 pub mod rebuild;
+pub use rebuild::line_of_body;
 pub mod resolve;
 
 use crate::{Error, Result};

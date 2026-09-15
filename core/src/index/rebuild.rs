@@ -19,7 +19,8 @@ fn hash(text: &str) -> String {
 }
 
 // The source line the body starts on, so a link's line maps into `body`.
-fn line_of_body(text: &str, body_offset: usize) -> i64 {
+/// The 1-based file line the body starts on.
+pub fn line_of_body(text: &str, body_offset: usize) -> i64 {
     text[..body_offset].bytes().filter(|b| *b == b'\n').count() as i64 + 1
 }
 
