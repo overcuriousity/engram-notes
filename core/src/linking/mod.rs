@@ -53,6 +53,17 @@ fn is_fence(line: &str) -> bool {
     t.starts_with("```") || t.starts_with("~~~")
 }
 
+/// A line from `split_inclusive('\n')` as its content and its line ending.
+fn split_eol(line: &str) -> (&str, &str) {
+    match line.strip_suffix("\r\n") {
+        Some(c) => (c, "\r\n"),
+        None => match line.strip_suffix('\n') {
+            Some(c) => (c, "\n"),
+            None => (line, ""),
+        },
+    }
+}
+
 fn strip_id(line: &str) -> &str {
     match BLOCK_ID.find(line) {
         Some(m) => line[..m.start()].trim_end(),
@@ -217,14 +228,19 @@ pub fn anchor(
     let line = *lines
         .get(target)
         .ok_or_else(|| Error::NotFound("block is outside the file".into()))?;
-    let (content, eol) = match line.strip_suffix("\r\n") {
-        Some(c) => (c, "\r\n"),
-        None => match line.strip_suffix('\n') {
-            Some(c) => (c, "\n"),
-            None => (line, ""),
-        },
-    };
-    if let Some(c) = BLOCK_ID.captures(content) {
+    let (content, eol) = split_eol(line);
+    // The anchor line, or the lone `^id` line `blocks` absorbed into this block:
+    // either already names it, and a second id for one block would break the link.
+    let own = BLOCK_ID.captures(content).or_else(|| {
+        let tail = (block.last + body_line) as usize - 2;
+        lines
+            .get(tail)
+            .copied()
+            .map(split_eol)
+            .filter(|(l, _)| tail != target && l.trim_start().starts_with('^'))
+            .and_then(|(l, _)| BLOCK_ID.captures(l))
+    });
+    if let Some(c) = own {
         return Ok(Anchored {
             text: text.to_owned(),
             id: c[1].to_owned(),
@@ -469,6 +485,29 @@ mod tests {
         assert_eq!(a.text, text);
         assert_eq!(a.id, "keep01");
         assert!(!a.changed);
+    }
+
+    #[test]
+    fn an_id_on_the_blocks_absorbed_line_is_reused() {
+        let text = "- item\n^abc123\n- next\n";
+        let b = blocks(text);
+        assert_eq!(
+            lines(&b),
+            vec![(BlockKind::List, 1, 2), (BlockKind::List, 3, 3)]
+        );
+        let a = anchor(text, 1, &b[0], &mut ids(&["new001"])).unwrap();
+        assert_eq!(a.text, text);
+        assert_eq!(a.id, "abc123");
+        assert!(!a.changed);
+    }
+
+    #[test]
+    fn a_childs_own_id_is_not_taken_for_the_item_above_it() {
+        let text = "- item\n  - child ^kid001\n";
+        let b = blocks(text);
+        let a = anchor(text, 1, &b[0], &mut ids(&["new001"])).unwrap();
+        assert_eq!(a.text, "- item ^new001\n  - child ^kid001\n");
+        assert_eq!(a.id, "new001");
     }
 
     #[test]
