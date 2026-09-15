@@ -45,6 +45,8 @@ class AppStateStore {
   // at its cursor. `replace` is a template taking the place of a selection.
   insertion = $state<{ pane: number; path: string; text: string; replace: boolean; n: number } | null>(null);
   private nextId = 2;
+  // What `open` subscribed to, so a second vault does not hear the first one's events.
+  private unlisten: (() => void)[] = [];
 
   get pane(): Pane {
     return L.findPane(this.layout, this.activePane) ?? L.panes(this.layout)[0];
@@ -66,6 +68,8 @@ class AppStateStore {
 
   async open(root: string) {
     const info = await api.openVault(root);
+    // The backend has moved on; what the window shows of the old vault goes with it.
+    this.clear();
     this.root = info.root;
     this.config = info.config;
     if (info.index_recreated) this.say("The index was damaged and has been rebuilt.");
@@ -74,17 +78,46 @@ class AppStateStore {
     await this.refresh();
     await this.loadSnippets();
     await this.restore(await api.getWorkspace());
-    await api.onIndexChanged(() => this.refresh());
-    await api.onFileChanged((c) => this.externalChange(c));
+    this.unlisten.push(
+      await api.onIndexChanged(() => this.refresh()),
+      await api.onFileChanged((c) => this.externalChange(c)),
+    );
     this.embed = await api.embedStatus();
-    await api.onEmbedStatus((s) => (this.embed = s));
-    await api.onWatchFailed((msg) => {
-      if (this.watching) this.say(`File watching stopped: ${msg}. Changes are read when the window gains focus.`);
-      this.watching = false;
-    });
-    await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused && !this.watching) this.rescan().catch((e) => this.say(api.errorMessage(e)));
-    });
+    this.unlisten.push(
+      await api.onEmbedStatus((s) => (this.embed = s)),
+      await api.onWatchFailed((msg) => {
+        if (this.watching) this.say(`File watching stopped: ${msg}. Changes are read when the window gains focus.`);
+        this.watching = false;
+      }),
+      await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+        if (focused && !this.watching) this.rescan().catch((e) => this.say(api.errorMessage(e)));
+      }),
+    );
+  }
+
+  /** Obsidian's "open another vault", in this window: unsaved notes land on disk first. */
+  async switchVault(root: string) {
+    for (const d of Object.values(this.docs)) await this.save(d);
+    await this.open(root);
+  }
+
+  private clear() {
+    for (const off of this.unlisten.splice(0)) off();
+    this.docs = {};
+    this.layout = { kind: "pane", id: 1, tabs: [], active: -1 };
+    this.activePane = 1;
+    this.nextId = 2;
+    this.files = [];
+    this.folders = [];
+    this.titles = [];
+    this.templates = [];
+    this.snippets = [];
+    this.lastNote = null;
+    this.jump = null;
+    this.insertion = null;
+    this.link = null;
+    this.palette = "none";
+    this.settings = false;
   }
 
   // The foundation's `{tabs, active}` still opens, as one pane.
