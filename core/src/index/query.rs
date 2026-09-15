@@ -254,16 +254,8 @@ mod tests {
 
     #[test]
     fn anchor_line_finds_a_heading_a_link_cannot_spell() {
-        let (_d, ix) = indexed(&[(
-            "A.md",
-            "# Title
-intro
-
-## Pros | Cons
-body
-",
-        )]);
-        // What the picker writes for that heading, and `[[A#Deep#Pros Cons]]`.
+        let (_d, ix) = indexed(&[("A.md", "# Title\nintro\n\n## Pros | Cons\nbody\n")]);
+        // What the picker writes for that heading, matched either case.
         assert_eq!(ix.anchor_line("A.md", "Pros Cons").unwrap(), Some(4));
         assert_eq!(ix.anchor_line("A.md", "pros cons").unwrap(), Some(4));
         assert_eq!(ix.anchor_line("A.md", "Title").unwrap(), Some(1));

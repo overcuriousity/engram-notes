@@ -18,6 +18,9 @@ describe("linkText", () => {
     expect(linkText("Note.md", h("Pros | Cons"), null, null)).toBe("[[Note#Pros Cons]]");
     expect(linkText("Note.md", h("a [b] #c ^d"), null, "w")).toBe("[[Note#a b c d|w]]");
     expect(headingFragment("  keeps   one space ")).toBe("keeps one space");
+    // Nothing left to point at: the note itself is what the link means.
+    expect(linkText("Note.md", h("^^^"), null, null)).toBe("[[Note]]");
+    expect(linkText("Note.md", h("|"), null, "w")).toBe("[[Note|w]]");
   });
   it("stems a path", () => {
     expect(stemOf("x/y/Z.md")).toBe("Z");

@@ -17,6 +17,9 @@ export function headingFragment(text: string): string {
 export function linkText(path: string, block: Block, id: string | null, alias: string | null): string {
   const fragment = block.kind === "heading" ? headingFragment(block.heading ?? block.text) : `^${id ?? ""}`;
   const tail = alias ? `|${alias}` : "";
+  // A heading of nothing but those characters leaves no fragment to point at,
+  // and `[[Note#]]` reads as the note anyway.
+  if (!fragment) return `[[${stemOf(path)}${tail}]]`;
   return `[[${stemOf(path)}#${fragment}${tail}]]`;
 }
 

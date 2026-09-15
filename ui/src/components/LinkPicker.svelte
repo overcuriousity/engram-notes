@@ -47,7 +47,6 @@
   }
 
   async function showBlocks(c: LinkCandidate) {
-    gen++;
     // Blocks are read from disk, so an open buffer of the target goes there
     // first; otherwise the picker lists lines the user cannot see and the
     // anchor is written under their edit.
@@ -61,6 +60,9 @@
     // An empty note has nothing to link to; a second step listing nothing
     // would leave the user pressing Enter at a blank pane.
     if (!found.length) return app.say(`${c.title} has no passage to link to.`);
+    // Only now: until the blocks are on screen a candidates request still
+    // describes what is, and the paths above all leave the note list showing.
+    gen++;
     list = found;
     chosen = c;
     // The block with the most of the query's words, ties to the earlier one; mirrors core's best_block.

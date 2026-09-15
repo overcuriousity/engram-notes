@@ -596,18 +596,9 @@ mod tests {
         assert_eq!(heading_fragment("a [b] #c ^d"), "a b c d");
         assert_eq!(heading_fragment("  keeps   one space "), "keeps one space");
         assert_eq!(heading_key("Pros | Cons"), "pros cons");
-        let body = "# A
-intro
-
-## Pros | Cons
-weighed
-";
+        let body = "# A\nintro\n\n## Pros | Cons\nweighed\n";
         let p = preview(body, Some("Pros Cons")).unwrap();
         assert_eq!(p.heading, "A");
-        assert_eq!(
-            p.text,
-            "## Pros | Cons
-weighed"
-        );
+        assert_eq!(p.text, "## Pros | Cons\nweighed");
     }
 }
