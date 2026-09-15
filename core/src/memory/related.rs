@@ -148,7 +148,7 @@ mod tests {
         .unwrap();
         assert!(r.similar.iter().all(|s| s.path != "Rust.md"));
         assert_eq!(r.similar[0].path, "Borrow.md");
-        assert_eq!(r.similar[0].heading, "Borrow");
+        assert!(r.similar[0].text.starts_with("# Borrow"));
     }
 
     #[test]

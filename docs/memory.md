@@ -11,10 +11,11 @@ passage vector) each fetch `limit × 3` candidates. Reciprocal rank fusion with
 snippet. With no model loaded the full-text branch answers alone, which is why
 search works while the model downloads.
 
-Passages are the body split on headings, then on paragraphs, at most 1 200
-characters, the heading path prepended before embedding. A vector is keyed by
-the hash of that text, so an unchanged passage in a renamed or re-saved note
-keeps it.
+A passage is the note's body after the frontmatter, truncated at the end at
+1 200 characters on a whitespace boundary: one vector per note, since a
+note's important part is at its beginning and everything downstream reasons
+per note. A vector is keyed by the hash of that text, so an unchanged body in
+a renamed or re-saved note keeps it.
 
 **The floor.** A cosine below `similarity_floor` (0.83) says nothing, and the
 hit is a stranger. This is not in the spec; it is here because the model needs
