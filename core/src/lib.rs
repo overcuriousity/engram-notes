@@ -8,6 +8,7 @@ pub mod frontmatter;
 pub mod graph;
 pub mod import;
 pub mod index;
+pub mod linking;
 pub mod memory;
 pub mod parse;
 pub mod rename;
