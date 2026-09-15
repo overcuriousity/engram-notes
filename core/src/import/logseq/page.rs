@@ -45,8 +45,14 @@ pub fn is_property(line: &str) -> Option<(String, String)> {
     Some((c[1].to_owned(), value.trim().to_owned()))
 }
 
-/// Leading whitespace as outline levels: a tab is one, `indent` spaces are one.
-fn level(ws: &str, indent: usize) -> usize {
+/// Logseq's own indent unit. A bullet's continuation lines sit two spaces
+/// under it whatever the destination vault writes its outlines with, so the
+/// source is read in this unit and only `render` uses the vault's.
+const SOURCE_INDENT: usize = 2;
+
+/// Leading whitespace as outline levels: a tab is one, `SOURCE_INDENT`
+/// spaces are one.
+fn level(ws: &str) -> usize {
     let mut depth = 0;
     let mut spaces = 0;
     for ch in ws.chars() {
@@ -55,7 +61,7 @@ fn level(ws: &str, indent: usize) -> usize {
             spaces = 0;
         } else {
             spaces += 1;
-            if spaces == indent {
+            if spaces == SOURCE_INDENT {
                 depth += 1;
                 spaces = 0;
             }
@@ -76,9 +82,9 @@ fn bullet(line: &str) -> Option<(&str, &str)> {
 
 /// A continuation line without its block's indentation and the two spaces
 /// Logseq adds under a bullet. What is left is the line as the writer saw it.
-fn continuation(line: &str, depth: usize, indent: usize) -> &str {
+fn continuation(line: &str, depth: usize) -> &str {
     let mut rest = line;
-    let unit = " ".repeat(indent);
+    let unit = " ".repeat(SOURCE_INDENT);
     for _ in 0..depth {
         if let Some(r) = rest.strip_prefix('\t') {
             rest = r;
@@ -95,7 +101,7 @@ fn is_fence(line: &str) -> bool {
     line.trim_start().starts_with("```")
 }
 
-pub fn parse(text: &str, indent: usize) -> Page {
+pub fn parse(text: &str) -> Page {
     let mut page = Page::default();
     // The depth of the block whose fence is open. A bullet no deeper than it
     // is a bullet again, so one unclosed fence cannot swallow the page.
@@ -117,7 +123,7 @@ pub fn parse(text: &str, indent: usize) -> Page {
             }
         }
         if let Some((ws, head)) = bullet(line) {
-            let depth = level(ws, indent);
+            let depth = level(ws);
             if fence.is_none_or(|open| depth <= open) {
                 page.blocks.push(Block {
                     line: n,
@@ -132,7 +138,7 @@ pub fn parse(text: &str, indent: usize) -> Page {
         }
         match page.blocks.last_mut() {
             Some(b) => {
-                let c = continuation(line, b.depth, indent);
+                let c = continuation(line, b.depth);
                 if is_fence(c) {
                     fence = fence.is_none().then_some(b.depth);
                 }
@@ -237,7 +243,13 @@ pub fn render(page: &Page, frontmatter: &str, indent: usize) -> String {
         if let Some(a) = &b.anchor
             && let Some(i) = anchor_line(&lines)
         {
-            lines[i] = format!("{} ^{a}", lines[i]).trim_start().to_owned();
+            // Only an empty head loses its (absent) text; a body line keeps
+            // the indentation that makes it a sub-list or a code block.
+            lines[i] = if lines[i].is_empty() {
+                format!("^{a}")
+            } else {
+                format!("{} ^{a}", lines[i])
+            };
         }
         let Some((head, body)) = lines.split_first() else {
             continue;
@@ -279,7 +291,7 @@ mod tests {
     #[test]
     fn page_properties_then_blocks_with_tabs() {
         let src = "title:: My Page\ntags:: a, b\n\n- first\n\tid:: 64f1a2b3-0000-4000-8000-000000000001\n\t- child\n\t  continued\n\t\t- grandchild\n- second";
-        let p = parse(src, 2);
+        let p = parse(src);
         assert_eq!(
             p.properties,
             vec![
@@ -315,7 +327,7 @@ mod tests {
 
     #[test]
     fn first_block_of_properties_is_the_page_properties() {
-        let p = parse("- title:: Old Style\n  public:: true\n- body", 2);
+        let p = parse("- title:: Old Style\n  public:: true\n- body");
         assert_eq!(
             p.properties,
             vec![
@@ -329,18 +341,38 @@ mod tests {
 
     #[test]
     fn frontmatter_and_prose_are_preamble() {
-        let p = parse("---\ntitle: X\n---\n\nprose\n- item", 2);
+        let p = parse("---\ntitle: X\n---\n\nprose\n- item");
         assert!(p.properties.is_empty());
         assert_eq!(p.preamble, vec!["---", "title: X", "---", "", "prose"]);
         assert_eq!(p.blocks[0].head, "item");
     }
 
     #[test]
-    fn spaces_count_as_levels_and_fences_do_not_start_blocks() {
-        let p = parse(
-            "- a\n  - b\n    ```\n    - not a block\n    ```\n    - c",
-            2,
+    fn a_fence_holds_whatever_the_vault_indents_with() {
+        // The source is Logseq's, the indent setting is the vault's; a `- `
+        // inside a fence is code either way.
+        let p = parse("- code\n  ```\n  - inside fence\n  ```\n- next\n");
+        let heads: Vec<_> = p.blocks.iter().map(|b| b.head.as_str()).collect();
+        assert_eq!(heads, vec!["code", "next"]);
+        assert_eq!(
+            render(&p, "", 4),
+            "- code\n  ```\n  - inside fence\n  ```\n- next\n"
         );
+    }
+
+    #[test]
+    fn an_anchor_keeps_the_indentation_of_its_line() {
+        let mut p = parse("- head\n  intro\n    indented continuation\n");
+        p.blocks[0].anchor = Some("64f1a2b3".to_owned());
+        assert_eq!(
+            render(&p, "", 2),
+            "- head\n  intro\n    indented continuation ^64f1a2b3\n"
+        );
+    }
+
+    #[test]
+    fn spaces_count_as_levels_and_fences_do_not_start_blocks() {
+        let p = parse("- a\n  - b\n    ```\n    - not a block\n    ```\n    - c");
         let heads: Vec<_> = p
             .blocks
             .iter()
@@ -355,22 +387,19 @@ mod tests {
 
     #[test]
     fn render_writes_spaces_and_keeps_order() {
-        let p = parse(
-            "- first\n\tid:: u\n\tfoo:: bar\n\t- child\n\t  continued\n\t\t- grandchild",
-            2,
-        );
+        let p = parse("- first\n\tid:: u\n\tfoo:: bar\n\t- child\n\t  continued\n\t\t- grandchild");
         let out = render(&p, "", 2);
         assert_eq!(
             out,
             "- first\n  id:: u\n  foo:: bar\n  - child\n    continued\n    - grandchild\n"
         );
-        let again = parse(&out, 2);
+        let again = parse(&out);
         assert_eq!(render(&again, "", 2), out);
     }
 
     #[test]
     fn render_puts_frontmatter_first() {
-        let p = parse("title:: T\n\n- a", 2);
+        let p = parse("title:: T\n\n- a");
         assert_eq!(
             render(&p, "---\ntitle: T\n---\n", 2),
             "---\ntitle: T\n---\n\n- a\n"
@@ -379,7 +408,7 @@ mod tests {
 
     #[test]
     fn a_path_with_colons_is_not_a_block_property() {
-        let p = parse("- code\n  std::mem::take(&mut x);\n  foo::\n", 2);
+        let p = parse("- code\n  std::mem::take(&mut x);\n  foo::\n");
         assert_eq!(text_lines(&p.blocks[0]), vec!["std::mem::take(&mut x);"]);
         assert_eq!(
             render(&p, "", 2),
@@ -389,7 +418,7 @@ mod tests {
 
     #[test]
     fn a_block_with_children_is_not_the_page_properties() {
-        let p = parse("- title:: X\n  - child\n", 2);
+        let p = parse("- title:: X\n  - child\n");
         assert!(p.properties.is_empty());
         assert_eq!(p.blocks.len(), 2);
         assert_eq!(p.blocks[0].head, "title:: X");
@@ -407,7 +436,7 @@ mod tests {
 
     #[test]
     fn an_unclosed_fence_ends_at_the_next_bullet_of_its_own_level() {
-        let p = parse("- ```\n  code\n- next\n  - child\n", 2);
+        let p = parse("- ```\n  code\n- next\n  - child\n");
         let heads: Vec<_> = p
             .blocks
             .iter()
@@ -439,17 +468,17 @@ mod tests {
 
     #[test]
     fn render_puts_the_anchor_where_obsidian_reads_it() {
-        let mut p = parse("- head\n  kept:: yes\n", 2);
+        let mut p = parse("- head\n  kept:: yes\n");
         p.blocks[0].anchor = Some("64f1a2b3".into());
         assert_eq!(render(&p, "", 2), "- head\n  kept:: yes ^64f1a2b3\n");
-        let mut p = parse("-\n", 2);
+        let mut p = parse("-\n");
         p.blocks[0].anchor = Some("64f1a2b3".into());
         assert_eq!(render(&p, "", 2), "- ^64f1a2b3\n");
     }
 
     #[test]
     fn empty_item_and_crlf() {
-        let p = parse("-\r\n- x\r\n", 2);
+        let p = parse("-\r\n- x\r\n");
         assert_eq!(p.blocks[0].head, "");
         assert_eq!(p.blocks[1].head, "x");
         assert_eq!(render(&p, "", 2), "-\n- x\n");

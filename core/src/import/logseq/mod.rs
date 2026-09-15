@@ -34,6 +34,10 @@ pub struct Options<'a> {
     /// Folder inside the vault, `""` for the root.
     pub dest: &'a str,
     pub config: &'a AppConfig,
+    /// Lowercased names, without `.md`, of the notes the vault already holds.
+    /// Obsidian resolves a bare link to the shortest path that answers to it,
+    /// so a name one of these shares cannot be linked to by name alone.
+    pub existing: &'a HashSet<String>,
 }
 
 #[derive(Debug, Default)]
@@ -49,6 +53,10 @@ struct Planned<'a> {
     page: Page,
     /// Frontmatter keys and values, `title` already decided.
     properties: Vec<(String, String)>,
+    /// A name the page answers to but cannot be filed under, so that links
+    /// written with it still land here. Not split on commas the way a
+    /// Logseq `alias::` is: this is one name, whatever it contains.
+    alias: Option<String>,
 }
 
 /// Folders of the graph that hold no notes: Logseq's own state and backups.
@@ -117,7 +125,7 @@ fn page_name(rel: &str) -> String {
 }
 
 fn plan<'a>(f: &'a SourceFile, opts: &Options, report: &mut Report) -> Planned<'a> {
-    let mut page = page::parse(&f.text, opts.config.editor.indent);
+    let mut page = page::parse(&f.text);
     let mut properties = std::mem::take(&mut page.properties);
     if let Some(name) = f.path.strip_prefix("journals/") {
         let stem = strip_md(name).unwrap_or(name);
@@ -138,21 +146,26 @@ fn plan<'a>(f: &'a SourceFile, opts: &Options, report: &mut Report) -> Planned<'
             journal: true,
             page,
             properties,
+            alias: None,
         };
     }
     let rel = f.path.strip_prefix("pages/").unwrap_or(&f.path);
     let mut name = page_name(rel);
+    let mut alias = None;
     if let Some(i) = properties.iter().position(|(k, _)| k == "title") {
         let title = properties[i].1.clone();
         if usable_name(&title) {
             properties.remove(i);
             name = title;
         } else {
+            // The graph links to the page by this title, so without the alias
+            // every one of those links would point at nothing.
             report.note(
                 &f.path,
                 0,
-                format!("title `{title}` cannot be a file name, kept as a property"),
+                format!("title `{title}` cannot be a file name, kept as a property and an alias"),
             );
+            alias = Some(title);
         }
     }
     // A title is checked above, so this is a name the graph's file name made:
@@ -173,6 +186,7 @@ fn plan<'a>(f: &'a SourceFile, opts: &Options, report: &mut Report) -> Planned<'
         journal: false,
         page,
         properties,
+        alias,
     }
 }
 
@@ -214,7 +228,12 @@ fn stem(path: &str) -> &str {
 
 /// Collects `id::` blocks into the table and stamps their anchors onto the
 /// blocks, so the second pass can render `^anchor` and rewrite `((uuid))`.
-fn collect_ids(planned: &mut [Planned], refs: &mut Refs, report: &mut Report) {
+fn collect_ids(
+    planned: &mut [Planned],
+    existing: &HashSet<String>,
+    refs: &mut Refs,
+    report: &mut Report,
+) {
     let mut stems: HashMap<String, usize> = HashMap::new();
     // A uuid copied onto a second block would otherwise point every reference
     // at whichever page was planned last.
@@ -226,7 +245,7 @@ fn collect_ids(planned: &mut [Planned], refs: &mut Refs, report: &mut Report) {
         let stem = stem(&p.path);
         // Obsidian resolves a bare name to the shortest path; a shared name
         // needs the full one.
-        let link = if stems[&stem.to_lowercase()] > 1 {
+        let link = if stems[&stem.to_lowercase()] > 1 || existing.contains(&stem.to_lowercase()) {
             strip_md(&p.path).unwrap_or(&p.path).to_owned()
         } else {
             stem.to_owned()
@@ -319,8 +338,13 @@ fn yaml_value(key: &str, value: &str) -> serde_json::Value {
     Value::String(value.to_owned())
 }
 
-fn frontmatter(properties: &[(String, String)], file: &str, report: &mut Report) -> String {
-    if properties.is_empty() {
+fn frontmatter(
+    properties: &[(String, String)],
+    alias: Option<&str>,
+    file: &str,
+    report: &mut Report,
+) -> String {
+    if properties.is_empty() && alias.is_none() {
         return String::new();
     }
     let mut map = serde_json::Map::new();
@@ -343,6 +367,17 @@ fn frontmatter(properties: &[(String, String)], file: &str, report: &mut Report)
             (None, value) => {
                 map.insert(key.to_owned(), value);
             }
+        }
+    }
+    if let Some(a) = alias {
+        let item = serde_json::Value::String(a.to_owned());
+        let list = map
+            .entry("aliases")
+            .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+        if let serde_json::Value::Array(have) = list
+            && !have.contains(&item)
+        {
+            have.push(item);
         }
     }
     match serde_yaml_ng::to_string(&map) {
@@ -391,12 +426,19 @@ fn render(p: &Planned, refs: &Refs, indent: usize, report: &mut Report) -> Strin
                         line,
                         format!("block property `{key}:: {value}` kept as text"),
                     );
+                    // The property stays a property, but a reference in its
+                    // value is a reference wherever it is written.
+                    let value = inline::rewrite(&value, refs, file, line, report);
                     b.body.push(Line::Property { line, key, value });
                 }
             }
         }
     }
-    page::render(&page, &frontmatter(&p.properties, file, report), indent)
+    page::render(
+        &page,
+        &frontmatter(&p.properties, p.alias.as_deref(), file, report),
+        indent,
+    )
 }
 
 pub fn map_graph(files: &[SourceFile], opts: &Options) -> Output {
@@ -450,7 +492,7 @@ pub fn map_graph(files: &[SourceFile], opts: &Options) -> Output {
         }
     });
     let mut refs = Refs::new();
-    collect_ids(&mut planned, &mut refs, &mut out.report);
+    collect_ids(&mut planned, opts.existing, &mut refs, &mut out.report);
     let indent = opts.config.editor.indent;
     for p in &planned {
         let text = render(p, &refs, indent, &mut out.report);
@@ -476,13 +518,14 @@ pub struct Summary {
     pub report: String,
 }
 
-/// A report name no imported page wants. The report is the one file the
-/// importer overwrites, and that licence covers only reports it wrote.
-fn report_path(dest: &str, pages: &[Mapped]) -> String {
+/// A report name nothing else wants: not a page this import writes, and not a
+/// file `exists` already answers for. The importer overwrites nothing, and an
+/// earlier run's report is as much the user's as any other note.
+fn report_path(dest: &str, pages: &[Mapped], exists: impl Fn(&str) -> bool) -> String {
     let taken: HashSet<String> = pages.iter().map(|m| m.path.to_lowercase()).collect();
     let mut path = join(dest, "import-report.md");
     let mut n = 1;
-    while taken.contains(&path.to_lowercase()) {
+    while taken.contains(&path.to_lowercase()) || exists(&path) {
         path = join(dest, &format!("import-report-{n}.md"));
         n += 1;
     }
@@ -528,7 +571,20 @@ pub fn run(vault: &Vault, cfg: &AppConfig, graph: &Path, dest: &str) -> Result<S
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    let mut out = map_graph(&files, &Options { dest, config: cfg });
+    let existing: HashSet<String> = vault
+        .walk()?
+        .iter()
+        .filter(|f| f.is_markdown)
+        .map(|f| stem(&f.path).to_lowercase())
+        .collect();
+    let mut out = map_graph(
+        &files,
+        &Options {
+            dest,
+            config: cfg,
+            existing: &existing,
+        },
+    );
     for (rel, why) in &unreadable {
         out.report.note(
             rel,
@@ -537,7 +593,7 @@ pub fn run(vault: &Vault, cfg: &AppConfig, graph: &Path, dest: &str) -> Result<S
         );
     }
     let mut s = Summary {
-        report: report_path(dest, &out.pages),
+        report: report_path(dest, &out.pages, |p| vault.abs(p).exists()),
         // What the mapping could not map; writing counts its own skips.
         unmapped: out.report.entries.len(),
         ..Default::default()
@@ -608,9 +664,14 @@ pub fn run(vault: &Vault, cfg: &AppConfig, graph: &Path, dest: &str) -> Result<S
             ""
         }
     );
-    let written = vault.write(&s.report, &out.report.render(&summary));
+    let written = vault.create(&s.report, &out.report.render(&summary));
     match failed {
-        Some(e) => Err(e),
+        // A stopped import returns no summary, so the error carries the one
+        // thing the user needs from it: where to read what happened.
+        Some(e) => Err(Error::Import {
+            report: s.report,
+            source: Box::new(e),
+        }),
         None => {
             written?;
             Ok(s)
@@ -656,6 +717,7 @@ mod tests {
         map_graph(
             files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "",
                 config: &cfg,
             },
@@ -703,7 +765,7 @@ mod tests {
             "pages/Project___Alpha.md:19 block property `logseq.order-list-type:: number` kept as text",
             "pages/Project___Alpha.md:24 task marker `CANCELED` has no checkbox form, kept as text",
             "pages/notes.md:1 reference `((64f1a2b3-0000-4000-8000-00000000dead))` has no block in this graph, kept as text",
-            "pages/odd title.md:0 title `what: is this?` cannot be a file name, kept as a property",
+            "pages/odd title.md:0 title `what: is this?` cannot be a file name, kept as a property and an alias",
             "whiteboards/board.edn:0 not imported",
         ];
         assert_eq!(whats, expected);
@@ -754,6 +816,7 @@ mod tests {
         let out = map_graph(
             &files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "Logseq/",
                 config: &cfg,
             },
@@ -777,6 +840,7 @@ mod tests {
         let out = map_graph(
             &files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "",
                 config: &cfg,
             },
@@ -803,16 +867,19 @@ mod tests {
         let report = vault.read("In/import-report.md").unwrap();
         assert!(report.contains("### `whiteboards/board.edn`"), "{report}");
         assert!(!report.contains("logseq/config.edn"), "{report}");
-        // Running again writes nothing and says why.
+        // Running again writes nothing and says why, and the first run's
+        // report is a note like any other: it is kept, not written over.
         let s = run(&vault, &cfg, &graph, "In/").unwrap();
         assert_eq!((s.pages, s.journals, s.assets), (0, 0, 0));
         assert_eq!(s.skipped, 9);
         // The files left alone are not constructs the mapping could not map.
         assert_eq!(s.unmapped, 9);
-        let report = vault.read("In/import-report.md").unwrap();
+        assert_eq!(s.report, "In/import-report-1.md");
+        assert!(report.contains("### `whiteboards/board.edn`"), "{report}");
+        let second = vault.read(&s.report).unwrap();
         assert!(
-            report.contains("already in the vault, not written"),
-            "{report}"
+            second.contains("already in the vault, not written"),
+            "{second}"
         );
     }
 
@@ -826,6 +893,7 @@ mod tests {
         let out = map_graph(
             &files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "",
                 config: &cfg,
             },
@@ -851,6 +919,7 @@ mod tests {
         let out = map_graph(
             &files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "",
                 config: &cfg,
             },
@@ -924,6 +993,68 @@ mod tests {
     }
 
     #[test]
+    fn a_name_the_vault_already_holds_is_linked_by_its_full_path() {
+        let cfg = AppConfig::default();
+        let files = vec![
+            SourceFile {
+                path: "pages/Alpha.md".into(),
+                text: "- one\n  id:: 64f1a2b3-0000-4000-8000-000000000001\n".into(),
+            },
+            SourceFile {
+                path: "pages/b.md".into(),
+                text: "- ((64f1a2b3-0000-4000-8000-000000000001))\n".into(),
+            },
+        ];
+        // The vault's own `Alpha.md` sits nearer the root, so a bare `[[Alpha]]`
+        // would be a link to it and not to the page that was imported.
+        let existing = HashSet::from(["alpha".to_owned()]);
+        let out = map_graph(
+            &files,
+            &Options {
+                existing: &existing,
+                dest: "In/",
+                config: &cfg,
+            },
+        );
+        assert_eq!(out.pages[1].text, "- [[In/Alpha#^64f1a2b3]]\n");
+    }
+
+    #[test]
+    fn a_reference_in_a_block_property_is_rewritten_too() {
+        let cfg = AppConfig::default();
+        let files = vec![SourceFile {
+            path: "pages/a.md".into(),
+            text: "- one\n  id:: 64f1a2b3-0000-4000-8000-000000000001\n- two\n  related:: ((64f1a2b3-0000-4000-8000-000000000001))\n".into(),
+        }];
+        let out = map_graph(
+            &files,
+            &Options {
+                existing: &HashSet::new(),
+                dest: "",
+                config: &cfg,
+            },
+        );
+        assert_eq!(
+            out.pages[0].text,
+            "- one ^64f1a2b3\n- two\n  related:: [[a#^64f1a2b3]]\n"
+        );
+    }
+
+    #[test]
+    fn a_report_the_importer_did_not_write_is_not_written_over() {
+        let graph = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(graph.path().join("pages")).unwrap();
+        std::fs::write(graph.path().join("pages/a.md"), "- x\n").unwrap();
+        let d = tempfile::tempdir().unwrap();
+        let vault = Vault::open(d.path()).unwrap();
+        vault.create("import-report.md", "my own notes").unwrap();
+        let s = run(&vault, &AppConfig::default(), graph.path(), "").unwrap();
+        assert_eq!(s.report, "import-report-1.md");
+        assert_eq!(vault.read("import-report.md").unwrap(), "my own notes");
+        assert!(vault.read(&s.report).unwrap().contains("Imported 1 pages"));
+    }
+
+    #[test]
     fn the_report_gives_way_to_a_page_that_wants_its_name() {
         let graph = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(graph.path().join("pages")).unwrap();
@@ -957,6 +1088,7 @@ mod tests {
         let out = map_graph(
             &files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "",
                 config: &cfg,
             },
@@ -983,6 +1115,7 @@ mod tests {
         let out = map_graph(
             &files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "",
                 config: &cfg,
             },
@@ -1007,6 +1140,7 @@ mod tests {
         let out = map_graph(
             &files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "",
                 config: &cfg,
             },
@@ -1038,6 +1172,7 @@ mod tests {
         let out = map_graph(
             &files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "",
                 config: &cfg,
             },
@@ -1141,6 +1276,7 @@ mod tests {
         let out = map_graph(
             &files,
             &Options {
+                existing: &HashSet::new(),
                 dest: "Logseq",
                 config: &cfg,
             },
@@ -1183,8 +1319,13 @@ mod tests {
         // `a` is a file, so the folder `a/b.md` needs cannot be made.
         vault.create("a", "in the way").unwrap();
         let err = run(&vault, &AppConfig::default(), graph.path(), "").unwrap_err();
-        assert!(matches!(err, Error::Io { .. }), "{err}");
-        let report = vault.read("import-report.md").unwrap();
+        // The error names the report, because a stopped import has no summary.
+        let Error::Import { report, source } = &err else {
+            panic!("{err}")
+        };
+        assert_eq!(report, "import-report.md");
+        assert!(matches!(**source, Error::Io { .. }), "{source}");
+        let report = vault.read(report).unwrap();
         assert!(report.contains("### `pages/a___b.md`"), "{report}");
         assert!(report.contains("could not be written"), "{report}");
         assert!(report.contains("stopped on an error"), "{report}");

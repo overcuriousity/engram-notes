@@ -41,7 +41,8 @@ export interface EmbedStatus { model: string | null; state: "off" | "loading" | 
 export type EventKind = "open" | "open_from_search" | "follow_link" | "search"
 export interface RenamePlan { from: string; to: string; affected: string[] }
 export interface Change { path: string; kind: "changed" | "removed" }
-export interface CommandError { code: string; message: string }
+/** `report` is set when a Logseq import stopped part-way: where it left its report. */
+export interface CommandError { code: string; message: string; report?: string }
 export interface GraphNode { id: string; title: string; kind: "note" | "attachment" | "unresolved"; tags: string[] }
 export interface GraphEdge { source: string; target: string }
 export interface Graph { nodes: GraphNode[]; edges: GraphEdge[] }

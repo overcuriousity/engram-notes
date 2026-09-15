@@ -86,6 +86,7 @@ pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdRe
         .map_err(|e| CommandError {
             code: "io",
             message: e.to_string(),
+            report: None,
         })?;
     let (mut index, index_recreated) = Index::open_or_recreate(&config::index_path(&vault)?)?;
     let stats = index.rebuild(&vault)?;
@@ -155,6 +156,7 @@ pub fn open_external(app: AppHandle, state: State<AppState>, path: String) -> Cm
         .map_err(|e| CommandError {
             code: "io",
             message: e.to_string(),
+            report: None,
         })
 }
 
@@ -585,10 +587,12 @@ fn inside_vault(vault: &Vault, dir: &str) -> CmdResult<String> {
         .map_err(|_| CommandError {
             code: "not_found",
             message: format!("{dir}: no such folder"),
+            report: None,
         })?;
     let rel = abs.strip_prefix(vault.root()).map_err(|_| CommandError {
         code: "config",
         message: "the destination must be a folder inside the vault".into(),
+        report: None,
     })?;
     Ok(rel.to_string_lossy().replace('\\', "/"))
 }
@@ -601,11 +605,13 @@ fn outside_vault(vault: &Vault, dir: &str) -> CmdResult<std::path::PathBuf> {
         .map_err(|_| CommandError {
             code: "not_found",
             message: format!("{dir}: no such folder"),
+            report: None,
         })?;
     if abs.starts_with(vault.root()) || vault.root().starts_with(&abs) {
         return Err(CommandError {
             code: "config",
             message: "the graph must be a folder outside the vault".into(),
+            report: None,
         });
     }
     Ok(abs)

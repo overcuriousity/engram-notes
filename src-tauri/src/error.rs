@@ -2,6 +2,9 @@
 pub struct CommandError {
     pub code: &'static str,
     pub message: String,
+    /// Where a stopped import left its report, for the UI to open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub report: Option<String>,
 }
 
 impl From<engram_core::Error> for CommandError {
@@ -16,10 +19,16 @@ impl From<engram_core::Error> for CommandError {
             Error::Exists(_) => "exists",
             Error::Base(_) => "base",
             Error::Embed(_) => "embed",
+            Error::Import { .. } => "import",
+        };
+        let report = match &e {
+            Error::Import { report, .. } => Some(report.clone()),
+            _ => None,
         };
         CommandError {
             code,
             message: e.to_string(),
+            report,
         }
     }
 }
@@ -29,6 +38,7 @@ impl CommandError {
         CommandError {
             code: "no_vault",
             message: "no vault is open".into(),
+            report: None,
         }
     }
 }
