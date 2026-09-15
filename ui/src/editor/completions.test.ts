@@ -52,8 +52,13 @@ describe("wikiCompletion", () => {
     expect(onBlock.mock.calls[1][0]).toBe(15);
   });
 
-  it("is quiet outside a link", async () => {
-    const src = wikiCompletion(async () => [], () => {});
+  it("is quiet outside a link, and drops the cached list there", async () => {
+    const reset = vi.fn();
+    const candidates = Object.assign(async () => [], { reset });
+    const src = wikiCompletion(candidates, () => {});
+    expect(await src(ctx("see [[car"))).not.toBeNull();
+    expect(reset).not.toHaveBeenCalled();
     expect(await src(ctx("plain text"))).toBeNull();
+    expect(reset).toHaveBeenCalledTimes(1);
   });
 });

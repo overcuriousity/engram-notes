@@ -901,7 +901,6 @@ mod tests {
             path: "A.md".into(),
             title: "A".into(),
             snippet: "<mark>a</mark>".into(),
-            heading: Some("H".into()),
             line: 3,
             similarity: Some(0.8),
             score: 0.5,

@@ -11,7 +11,7 @@
   import { ensureSyntaxTree, foldEffect, indentUnit, unfoldEffect } from "@codemirror/language";
   import { editorTheme, markdownHighlight } from "../editor/theme";
   import { livePreview } from "../editor/livePreview";
-  import { completions } from "../editor/completions";
+  import { completions, type Candidates } from "../editor/completions";
   import { foldKeys, foldRestore, foldTransaction, listOnlyFolding, markdownBrackets, outlineFolding, outlineKeymap } from "../editor/outline";
   import { textDiff } from "../lib/textdiff";
   import { linkCandidates, type LinkCandidate } from "../lib/api";
@@ -53,7 +53,7 @@
   // Trailing edge, 80 ms: a query the typing overtook costs no round trip, and
   // it keeps the last list rather than flickering the popup empty. Every call
   // embeds the query behind one lock in the shell, so one per pause is the point.
-  function candidates(q: string): Promise<LinkCandidate[]> {
+  function candidateList(q: string): Promise<LinkCandidate[]> {
     if (q === lastQ) return lastP;
     lastQ = q;
     if (pending) {
@@ -69,6 +69,8 @@
             res(list);
           },
           (e) => {
+            // Not cached: the same query typed again should ask again.
+            lastQ = null;
             onError(e);
             res(lastList);
           },
@@ -78,6 +80,9 @@
     });
     return lastP;
   }
+  // The popup closing is the one moment nothing on screen depends on the cache,
+  // so it is where a list the vault has outlived is dropped.
+  const candidates: Candidates = Object.assign(candidateList, { reset: () => (lastQ = null) });
 
   onMount(() => {
     view = new EditorView({

@@ -12,8 +12,8 @@ pub struct Hit {
     pub title: String,
     /// HTML-safe; the full-text branch marks its matches with `<mark>`.
     pub snippet: String,
-    pub heading: Option<String>,
-    /// 1-based line in the file, for jumping to the passage.
+    /// 1-based line in the file. A note is one passage since 0.5, so this is
+    /// where its body starts and not where the match sits.
     pub line: u32,
     /// Cosine of the best passage; `None` when only full-text found it.
     pub similarity: Option<f32>,
@@ -52,17 +52,18 @@ fn escape_html(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// A result row is one line, and a passage is the whole note since 0.5, so a
-/// hit the vector branch alone found shows a lead instead of the body.
+/// A result row is one line, and a passage is the whole note since 0.5, so
+/// anything showing passage text shows a lead instead of the body.
 const LEAD_CHARS: usize = 200;
 
-fn lead(text: &str) -> String {
+/// The first line's worth of `text`, flattened, cut on a word boundary.
+pub(crate) fn lead(text: &str) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let Some((hard, _)) = flat.char_indices().nth(LEAD_CHARS) else {
-        return escape_html(&flat);
+        return flat;
     };
     let at = flat[..hard].rfind(' ').unwrap_or(hard);
-    format!("{}…", escape_html(flat[..at].trim_end()))
+    format!("{}…", flat[..at].trim_end())
 }
 
 /// Full-text and semantic retrieval fused into one list, with the divider
@@ -79,8 +80,27 @@ pub fn hybrid(
     at: i64,
     limit: usize,
 ) -> Result<SearchResults> {
+    let hits = hybrid_hits(index, query, query_vec, cfg, mem, at, limit)?;
+    let associated = match mem.enabled && !hits.is_empty() {
+        true => crate::memory::spread::spread(index, &hits, mem, at)?,
+        false => vec![],
+    };
+    Ok(SearchResults { hits, associated })
+}
+
+/// `hybrid` without the spread: what link completion wants, since it lists
+/// notes the query itself found and never their associates.
+pub fn hybrid_hits(
+    index: &Index,
+    query: &str,
+    query_vec: Option<&[f32]>,
+    cfg: &SearchConfig,
+    mem: &MemoryConfig,
+    at: i64,
+    limit: usize,
+) -> Result<Vec<Hit>> {
     if query.trim().is_empty() {
-        return Ok(SearchResults::default());
+        return Ok(vec![]);
     }
     let wide = limit * cfg.candidate_multiplier.max(1);
     let fts = index.search_fts(query, wide)?;
@@ -112,9 +132,8 @@ pub fn hybrid(
                 title: titles.get(&path).cloned().unwrap_or_else(|| path.clone()),
                 snippet: match text {
                     Some(h) => h.snippet.clone(),
-                    None => lead(passage.map_or("", |p| p.text.as_str())),
+                    None => escape_html(&lead(passage.map_or("", |p| p.text.as_str()))),
                 },
-                heading: passage.map(|p| p.heading.clone()).filter(|h| !h.is_empty()),
                 line: passage
                     .map(|p| p.line)
                     .or(text.map(|h| h.line))
@@ -133,11 +152,7 @@ pub fn hybrid(
         crate::memory::prime::prime(&mut hits, &activation, mem.prime_margin, mem.prime_lift);
     }
     fuse::mark_past_divider(&mut hits, cfg);
-    let associated = match mem.enabled {
-        true => crate::memory::spread::spread(index, &hits, mem, at)?,
-        false => vec![],
-    };
-    Ok(SearchResults { hits, associated })
+    Ok(hits)
 }
 
 #[cfg(test)]
@@ -153,7 +168,8 @@ mod tests {
     #[test]
     fn a_lead_is_one_line_and_cut_on_a_word() {
         assert_eq!(lead("a\n\nb  c"), "a b c");
-        assert_eq!(lead("<b>&"), "&lt;b&gt;&amp;");
+        // Plain text: a snippet is escaped where it is built, a related row is not.
+        assert_eq!(lead("<b>&"), "<b>&");
         let long = lead(&"word ".repeat(100));
         assert!(long.ends_with("word…"), "{long}");
         assert!(long.chars().count() <= LEAD_CHARS + 1, "{}", long.len());

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockTrigger, firstLine, linkText, stemOf } from "./linkpicker";
+import { blockTrigger, firstLine, headingFragment, linkText, stemOf } from "./linkpicker";
 import type { Block } from "./api";
 
 const para: Block = { kind: "paragraph", first: 3, last: 4, text: "para one\nstill one", heading: null };
@@ -12,6 +12,12 @@ describe("linkText", () => {
   it("writes a heading link without an anchor", () => {
     expect(linkText("Note.md", head, null, null)).toBe("[[Note#Title]]");
     expect(linkText("Note.md", head, null, "w")).toBe("[[Note#Title|w]]");
+  });
+  it("drops what a link cannot spell from a heading", () => {
+    const h = (text: string): Block => ({ ...head, text, heading: text });
+    expect(linkText("Note.md", h("Pros | Cons"), null, null)).toBe("[[Note#Pros Cons]]");
+    expect(linkText("Note.md", h("a [b] #c ^d"), null, "w")).toBe("[[Note#a b c d|w]]");
+    expect(headingFragment("  keeps   one space ")).toBe("keeps one space");
   });
   it("stems a path", () => {
     expect(stemOf("x/y/Z.md")).toBe("Z");

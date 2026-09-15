@@ -29,12 +29,12 @@ export interface Unresolved { target: string; count: number }
 export interface TagCount { tag: string; count: number }
 export interface PropertyCount { key: string; count: number }
 export interface Hit {
-  path: string; title: string; snippet: string; heading: string | null; line: number;
+  path: string; title: string; snippet: string; line: number;
   similarity: number | null; score: number; past_divider: boolean; primed: boolean;
 }
 export interface Associated { path: string; title: string; via: string; cue: string | null; strength: number }
 export interface SearchResults { hits: Hit[]; associated: Associated[] }
-export interface SimilarNote { path: string; title: string; heading: string; text: string; similarity: number }
+export interface SimilarNote { path: string; title: string; text: string; similarity: number }
 export interface Related { associated: Associated[]; similar: SimilarNote[]; suggested: SimilarNote[] }
 export interface SemanticEdge { source: string; target: string; weight: number; kind: "assoc" | "similar" }
 export interface EmbedStatus { model: string | null; state: "off" | "loading" | "ready" | "error"; pending: number; error: string | null }

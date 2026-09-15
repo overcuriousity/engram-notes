@@ -11,7 +11,7 @@ use std::collections::HashSet;
 pub struct SimilarNote {
     pub path: String,
     pub title: String,
-    pub heading: String,
+    /// A lead, not the passage: a passage is the whole note since 0.5.
     pub text: String,
     pub similarity: f32,
 }
@@ -60,8 +60,7 @@ pub fn related(
                 .cloned()
                 .unwrap_or_else(|| h.path.clone()),
             path: h.path,
-            heading: h.heading,
-            text: h.text,
+            text: crate::search::lead(&h.text),
             similarity: h.similarity,
         })
         .collect();

@@ -41,7 +41,7 @@ fn rank(title: &str, path: &str, q: &str) -> u8 {
     }
 }
 
-/// Notes whose title, stem or path contains the query, then notes `hybrid`
+/// Notes whose title, stem or path contains the query, then notes retrieval
 /// finds above the divider that spelling did not, up to `limit`.
 pub fn link_candidates(
     index: &Index,
@@ -71,12 +71,13 @@ pub fn link_candidates(
         .collect();
     // Stable, so notes of equal rank keep the index's title order.
     out.sort_by_key(|c| rank(&c.title, &c.path, &q));
-    if !q.is_empty() {
+    // Spelling alone can already fill the list, and retrieval is the expensive
+    // half: the vector scan runs over every note, once per keystroke.
+    if !q.is_empty() && out.len() < limit {
         let seen: HashSet<String> = out.iter().map(|c| c.path.clone()).collect();
-        let found = super::hybrid(index, query, query_vec, cfg, mem, at, limit)?;
+        let found = super::hybrid_hits(index, query, query_vec, cfg, mem, at, limit)?;
         out.extend(
             found
-                .hits
                 .into_iter()
                 .filter(|h| !h.past_divider && !seen.contains(&h.path))
                 .map(|h| LinkCandidate {

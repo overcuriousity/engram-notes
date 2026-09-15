@@ -162,21 +162,29 @@ impl Index {
 
     /// The source line a `heading` or `^block` fragment points at in `path`.
     pub fn anchor_line(&self, path: &str, fragment: &str) -> Result<Option<u32>> {
-        let (sql, key) = match fragment.strip_prefix('^') {
-            Some(id) => (
-                "SELECT line FROM blocks WHERE path=?1 AND lower(id)=lower(?2) LIMIT 1",
-                id,
-            ),
-            // `[[Note#A#B]]` names heading B under A; the last part finds it.
-            None => (
-                "SELECT line FROM headings WHERE path=?1 AND lower(text)=lower(?2) ORDER BY line LIMIT 1",
-                fragment.rsplit('#').next().unwrap_or(fragment).trim(),
-            ),
-        };
-        Ok(self
+        if let Some(id) = fragment.strip_prefix('^') {
+            return Ok(self
+                .conn
+                .query_row(
+                    "SELECT line FROM blocks WHERE path=?1 AND lower(id)=lower(?2) LIMIT 1",
+                    rusqlite::params![path, id],
+                    |r| r.get(0),
+                )
+                .optional()?);
+        }
+        // `[[Note#A#B]]` names heading B under A; the last part finds it. The
+        // match is on what a link can spell, so it happens here and not in SQL.
+        let want = crate::linking::heading_key(fragment.rsplit('#').next().unwrap_or(fragment));
+        let mut st = self
             .conn
-            .query_row(sql, rusqlite::params![path, key], |r| r.get(0))
-            .optional()?)
+            .prepare("SELECT text, line FROM headings WHERE path=?1 ORDER BY line")?;
+        let mut rows = st.query(rusqlite::params![path])?;
+        while let Some(r) = rows.next()? {
+            if crate::linking::heading_key(&r.get::<_, String>(0)?) == want {
+                return Ok(Some(r.get(1)?));
+            }
+        }
+        Ok(None)
     }
 
     /// Every property key in the vault and how many notes carry it.
@@ -242,5 +250,23 @@ mod tests {
         assert_eq!(counts[1].key, "tags");
         assert_eq!(counts[1].count, 1);
         assert_eq!(counts.len(), 2);
+    }
+
+    #[test]
+    fn anchor_line_finds_a_heading_a_link_cannot_spell() {
+        let (_d, ix) = indexed(&[(
+            "A.md",
+            "# Title
+intro
+
+## Pros | Cons
+body
+",
+        )]);
+        // What the picker writes for that heading, and `[[A#Deep#Pros Cons]]`.
+        assert_eq!(ix.anchor_line("A.md", "Pros Cons").unwrap(), Some(4));
+        assert_eq!(ix.anchor_line("A.md", "pros cons").unwrap(), Some(4));
+        assert_eq!(ix.anchor_line("A.md", "Title").unwrap(), Some(1));
+        assert_eq!(ix.anchor_line("A.md", "nope").unwrap(), None);
     }
 }

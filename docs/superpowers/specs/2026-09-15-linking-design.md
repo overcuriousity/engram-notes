@@ -50,9 +50,12 @@ The `passages` and `vectors` tables keep their shape; `vectors` stays keyed
 by the text hash, so an unchanged body keeps its embedding across a rename or
 a re-save. `SCHEMA_VERSION` bumps, which rebuilds.
 
-Everything that reads passages keeps working unchanged: `search_vectors`,
-`hybrid`, `related`, `semantic_edges` and `pending_vectors` all address rows
-by `(path, ordinal)` or hash and never assume more than one row per note.
+`search_vectors`, `hybrid`, `related`, `semantic_edges` and `pending_vectors`
+all address rows by `(path, ordinal)` or hash and never assume more than one
+row per note, so they keep working. What they return changes, and says so:
+a passage carries no heading and starts at line 1, so `Hit` loses its
+`heading`, a result opens at the note's first body line, and `SimilarNote`
+shows a lead rather than the body.
 
 ## Blocks
 
@@ -83,6 +86,10 @@ earlier block, `None` when nothing matches.
 given the block and a fresh id:
 
 - A `Heading` block never gets an anchor; the link is `[[Note#Heading]]`.
+  `[`, `]`, `|`, `#` and `^` cannot be written inside the fragment, so the
+  link drops them and whitespace collapses: `## Pros | Cons` is linked as
+  `[[Note#Pros Cons]]`. `linking::heading_key` drops the same characters on
+  both sides, so `anchor_line` and `preview` still resolve that heading.
 - If the block's anchor line already ends in `^existing`, that id is returned
   and the text is returned unchanged.
 - Otherwise ` ^id` is appended to the anchor line and nothing else in the

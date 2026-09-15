@@ -11,13 +11,25 @@
   let chosen = $state<LinkCandidate | null>(null);
   let list = $state<Block[]>([]);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  // A request in flight cannot be cancelled, only disowned: one that lands
+  // after the user has picked a note would put the note count on screen while
+  // the blocks are showing, and every row after that is the wrong row.
+  let gen = 0;
 
   $effect(() => {
     if (chosen) return;
     const query = q;
+    const mine = ++gen;
     clearTimeout(timer);
     timer = setTimeout(async () => {
-      try { notes = await linkCandidates(query); } catch (e) { app.say(errorMessage(e)); }
+      try {
+        const got = await linkCandidates(query);
+        if (mine !== gen) return;
+        notes = got;
+      } catch (e) {
+        if (mine !== gen) return;
+        app.say(errorMessage(e));
+      }
       onCount(notes.length);
     }, 80);
     return () => clearTimeout(timer);
@@ -31,16 +43,25 @@
 
   export async function pickNote(i: number) {
     const c = notes[i];
-    if (!c) return;
+    if (c) await showBlocks(c);
+  }
+
+  async function showBlocks(c: LinkCandidate) {
+    gen++;
     // Blocks are read from disk, so an open buffer of the target goes there
     // first; otherwise the picker lists lines the user cannot see and the
     // anchor is written under their edit.
     if (!(await app.flush(c.path))) return;
+    let found: Block[];
     try {
-      list = await fetchBlocks(c.path);
+      found = await fetchBlocks(c.path);
     } catch (e) {
       return app.say(errorMessage(e));
     }
+    // An empty note has nothing to link to; a second step listing nothing
+    // would leave the user pressing Enter at a blank pane.
+    if (!found.length) return app.say(`${c.title} has no passage to link to.`);
+    list = found;
     chosen = c;
     // The block with the most of the query's words, ties to the earlier one; mirrors core's best_block.
     let best = 0, bestN = 0;
@@ -68,7 +89,7 @@
     } catch (e) {
       app.say(errorMessage(e));
       // The block moved under the picker: show the note's blocks as they are now.
-      if ((e as { code?: string })?.code === "not_found") await pickNote(notes.indexOf(chosen));
+      if ((e as { code?: string })?.code === "not_found") await showBlocks(chosen);
     }
   }
 

@@ -2,9 +2,12 @@ import { autocompletion, type CompletionContext, type CompletionResult } from "@
 import type { LinkCandidate } from "../lib/api";
 import { blockTrigger } from "../lib/linkpicker";
 
+/** A `[[` candidate source; `reset` drops whatever it cached for a query. */
+export type Candidates = ((q: string) => Promise<LinkCandidate[]>) & { reset?: () => void };
+
 /** Hybrid `[[` completion: the backend lists spelling matches, then meaning matches. */
 export function wikiCompletion(
-  candidates: (q: string) => Promise<LinkCandidate[]>,
+  candidates: Candidates,
   onBlockSearch: (from: number, to: number, query: string) => void,
 ) {
   // The trigger text stays in the document after the picker closes, so without
@@ -27,7 +30,12 @@ export function wikiCompletion(
     }
     handed = null;
     const m = ctx.matchBefore(/\[\[([^\]|#]*)$/);
-    if (!m) return null;
+    // Outside a link there is nothing on screen to keep: a cached list held
+    // past this point would answer for a vault that has since changed.
+    if (!m) {
+      candidates.reset?.();
+      return null;
+    }
     const found = await candidates(m.text.slice(2));
     const options = found.map((c) => {
       const stem = c.path.split("/").pop()!.replace(/\.md$/i, "");
@@ -47,7 +55,7 @@ export function tagCompletion(tags: () => string[]) {
 }
 
 export const completions = (
-  candidates: (q: string) => Promise<LinkCandidate[]>,
+  candidates: Candidates,
   onBlockSearch: (from: number, to: number, query: string) => void,
   tags: () => string[],
 ) => autocompletion({ override: [wikiCompletion(candidates, onBlockSearch), tagCompletion(tags)], icons: false });

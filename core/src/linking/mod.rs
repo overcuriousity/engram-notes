@@ -164,6 +164,25 @@ pub fn blocks(body: &str) -> Vec<Block> {
     out
 }
 
+/// Characters `[[Note#…]]` cannot carry: `|` would start an alias, `#` a
+/// deeper heading, `^` a block id, and a bracket would end the link.
+const UNWRITABLE: [char; 5] = ['[', ']', '|', '#', '^'];
+
+/// A heading's text as a link can spell it, whitespace collapsed.
+pub fn heading_fragment(text: &str) -> String {
+    text.split_whitespace()
+        .map(|w| w.replace(UNWRITABLE, ""))
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// How a heading and a link fragment are compared: on what a link can spell,
+/// so a heading holding `|` still resolves from the link written for it.
+pub fn heading_key(text: &str) -> String {
+    heading_fragment(text).to_lowercase()
+}
+
 /// Query terms: lowercased words of two characters or more.
 fn terms(query: &str) -> Vec<String> {
     let mut t: Vec<String> = query
@@ -321,12 +340,10 @@ pub fn preview(body: &str, fragment: Option<&str>) -> Option<Preview> {
         }
         Some(f) => {
             // `[[Note#A#B]]` names heading B under A; the last part finds it.
-            let want = f.rsplit('#').next().unwrap_or(f).trim();
-            let i = all.iter().position(|b| {
-                b.heading
-                    .as_deref()
-                    .is_some_and(|h| h.eq_ignore_ascii_case(want))
-            })?;
+            let want = heading_key(f.rsplit('#').next().unwrap_or(f));
+            let i = all
+                .iter()
+                .position(|b| b.heading.as_deref().is_some_and(|h| heading_key(h) == want))?;
             let level = |b: &Block| {
                 body.lines()
                     .nth(b.first as usize - 1)
@@ -571,5 +588,26 @@ mod tests {
             .join("\n");
         let p = preview(&body, None).unwrap();
         assert_eq!(p.text.lines().count(), 40);
+    }
+
+    #[test]
+    fn a_heading_a_link_cannot_spell_is_written_and_matched_without_those_chars() {
+        assert_eq!(heading_fragment("Pros | Cons"), "Pros Cons");
+        assert_eq!(heading_fragment("a [b] #c ^d"), "a b c d");
+        assert_eq!(heading_fragment("  keeps   one space "), "keeps one space");
+        assert_eq!(heading_key("Pros | Cons"), "pros cons");
+        let body = "# A
+intro
+
+## Pros | Cons
+weighed
+";
+        let p = preview(body, Some("Pros Cons")).unwrap();
+        assert_eq!(p.heading, "A");
+        assert_eq!(
+            p.text,
+            "## Pros | Cons
+weighed"
+        );
     }
 }
