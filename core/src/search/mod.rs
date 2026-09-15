@@ -1,5 +1,6 @@
 //! Full-text and semantic retrieval, fused, with a divider where relevance falls.
 
+pub mod candidates;
 pub mod fuse;
 pub mod passages;
 pub mod vector;
