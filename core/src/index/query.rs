@@ -196,6 +196,14 @@ impl Index {
             .collect::<std::result::Result<_, _>>()?)
     }
 
+    /// The body as indexed, without the frontmatter.
+    pub fn body(&self, path: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT body FROM notes WHERE path=?1", [path], |r| r.get(0))
+            .optional()?)
+    }
+
     pub fn titles(&self) -> Result<Vec<(String, String)>> {
         Ok(self
             .conn
