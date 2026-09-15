@@ -7,13 +7,25 @@ export function wikiCompletion(
   candidates: (q: string) => Promise<LinkCandidate[]>,
   onBlockSearch: (from: number, to: number, query: string) => void,
 ) {
+  // The trigger text stays in the document after the picker closes, so without
+  // a latch the next keystroke reopens it and `[[^^` can be neither typed nor
+  // escaped. One `[[^^` is handed over once; the picker owns the query from then
+  // on, since it holds the focus while it is open.
+  let handed: number | null = null;
   return async (ctx: CompletionContext): Promise<CompletionResult | null> => {
     const lineFrom = ctx.state.doc.lineAt(ctx.pos).from;
     const trigger = blockTrigger(ctx.state.sliceDoc(lineFrom, ctx.pos));
     if (trigger) {
-      onBlockSearch(lineFrom + trigger.from, ctx.pos, trigger.query);
+      const from = lineFrom + trigger.from;
+      // closeBrackets has already put `]]` after the cursor; the link replaces those too.
+      const to = ctx.state.sliceDoc(ctx.pos, ctx.pos + 2) === "]]" ? ctx.pos + 2 : ctx.pos;
+      if (from !== handed) {
+        handed = from;
+        onBlockSearch(from, to, trigger.query);
+      }
       return null;
     }
+    handed = null;
     const m = ctx.matchBefore(/\[\[([^\]|#]*)$/);
     if (!m) return null;
     const found = await candidates(m.text.slice(2));

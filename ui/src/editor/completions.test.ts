@@ -32,6 +32,26 @@ describe("wikiCompletion", () => {
     expect(onBlock).toHaveBeenCalledWith(2, 11, "shell");
   });
 
+  it("swallows the brackets closeBrackets added", async () => {
+    const onBlock = vi.fn();
+    const src = wikiCompletion(async () => [], onBlock);
+    const state = EditorState.create({ doc: "x [[^^shell]]" });
+    expect(await src(new CompletionContext(state, 11, true))).toBeNull();
+    expect(onBlock).toHaveBeenCalledWith(2, 13, "shell");
+  });
+
+  it("hands one [[^^ over once, so Escape is not undone by the next keystroke", async () => {
+    const onBlock = vi.fn();
+    const src = wikiCompletion(async () => [], onBlock);
+    await src(ctx("x [[^^she"));
+    await src(ctx("x [[^^shel"));
+    expect(onBlock).toHaveBeenCalledTimes(1);
+    // A second trigger elsewhere is its own, and is offered.
+    await src(ctx("x [[^^shel]] y [[^^oth"));
+    expect(onBlock).toHaveBeenCalledTimes(2);
+    expect(onBlock.mock.calls[1][0]).toBe(15);
+  });
+
   it("is quiet outside a link", async () => {
     const src = wikiCompletion(async () => [], () => {});
     expect(await src(ctx("plain text"))).toBeNull();
