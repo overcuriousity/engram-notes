@@ -99,7 +99,8 @@
 
   function onKey(e: KeyboardEvent) {
     const last = (app.palette === "search" ? rows : app.palette === "link" ? linkRows : items.length) - 1;
-    if (e.key === "ArrowDown") { sel = Math.min(sel + 1, last); e.preventDefault(); }
+    // An empty list puts `last` at -1, and a negative sel makes Enter a no-op.
+    if (e.key === "ArrowDown") { sel = Math.max(0, Math.min(sel + 1, last)); e.preventDefault(); }
     else if (e.key === "ArrowUp") { sel = Math.max(sel - 1, 0); e.preventDefault(); }
     else if (e.key === "Enter") {
       e.preventDefault();
@@ -119,7 +120,7 @@
       {#if app.palette === "search"}
         <SearchResults_ results={found} {sel} onOpen={openHit} />
       {:else if app.palette === "link"}
-        <LinkPicker bind:this={picker} {q} {sel} onSel={(i) => (sel = i)} onCount={(n) => { linkRows = n; sel = Math.min(sel, Math.max(0, n - 1)); }} onDone={() => (app.palette = "none")} />
+        <LinkPicker bind:this={picker} {q} {sel} onSel={(i) => (sel = i)} onCount={(n) => { linkRows = n; sel = Math.max(0, Math.min(sel, n - 1)); }} onDone={() => (app.palette = "none")} />
       {:else}
         <div class="items">
           {#each items as it, i (it.label + it.detail)}

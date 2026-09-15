@@ -28,6 +28,7 @@
     onblur: () => void;
     onFollow: (target: string) => void;
     onPassageLink: (from: number, to: number, query: string) => void;
+    onError: (e: unknown) => void;
     tags: () => string[];
     image: (target: string) => string | null;
     indent: number;
@@ -35,7 +36,7 @@
     folds: string[] | null;
     onFolds: (keys: string[]) => void;
   }
-  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, onPassageLink, tags, image, indent, folds, onFolds }: Props = $props();
+  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, onPassageLink, onError, tags, image, indent, folds, onFolds }: Props = $props();
   let host: HTMLDivElement;
   // State, so effects that need the view run again once it exists.
   let view = $state.raw<EditorView>();
@@ -47,11 +48,34 @@
   let alive = true;
   let lastQ: string | null = null;
   let lastP: Promise<LinkCandidate[]> = Promise.resolve([]);
-  // Keep the last list while the backend answers; 80 ms keeps the typing rhythm.
+  let lastList: LinkCandidate[] = [];
+  let pending: { timer: ReturnType<typeof setTimeout>; keep: (c: LinkCandidate[]) => void } | null = null;
+  // Trailing edge, 80 ms: a query the typing overtook costs no round trip, and
+  // it keeps the last list rather than flickering the popup empty. Every call
+  // embeds the query behind one lock in the shell, so one per pause is the point.
   function candidates(q: string): Promise<LinkCandidate[]> {
     if (q === lastQ) return lastP;
     lastQ = q;
-    lastP = new Promise((res) => setTimeout(() => linkCandidates(q).then(res, () => res([])), 80));
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.keep(lastList);
+    }
+    lastP = new Promise((res) => {
+      const timer = setTimeout(() => {
+        pending = null;
+        linkCandidates(q).then(
+          (list) => {
+            lastList = list;
+            res(list);
+          },
+          (e) => {
+            onError(e);
+            res(lastList);
+          },
+        );
+      }, 80);
+      pending = { timer, keep: res };
+    });
     return lastP;
   }
 
@@ -109,6 +133,7 @@
     if (focus) view.focus();
     return () => {
       alive = false;
+      if (pending) clearTimeout(pending.timer);
       view?.destroy();
     };
   });

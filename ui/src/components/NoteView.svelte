@@ -45,6 +45,10 @@
   // The target passage, shown after the pointer rests on a link; the id is never in it.
   let hover = $state<{ title: string; preview: Preview; x: number; y: number } | null>(null);
   let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+  // Resolving a link takes two round trips, which outlast the pointer. Without
+  // this the answer to a link already left opens a popover whose `mouseout`
+  // has been and gone, and nothing is left to close it.
+  let hoverGen = 0;
 
   function linkUnder(e: MouseEvent): HTMLElement | null {
     return (e.target as HTMLElement).closest?.("a.cm-wikilink, a.wikilink") as HTMLElement | null;
@@ -55,14 +59,15 @@
     if (!a?.dataset.target) return;
     const target = a.dataset.target;
     clearTimeout(hoverTimer);
+    const gen = ++hoverGen;
     hoverTimer = setTimeout(async () => {
       const hash = target.indexOf("#");
       const name = hash < 0 ? target : target.slice(0, hash);
       const fragment = hash < 0 ? null : target.slice(hash + 1);
       const found = await resolveLink(name).catch(() => null);
-      if (!found) return;
+      if (!found || gen !== hoverGen) return;
       const preview = await linkPreview(found, fragment).catch(() => null);
-      if (!preview) return;
+      if (!preview || gen !== hoverGen) return;
       const r = a.getBoundingClientRect();
       hover = { title: app.titles.find(([p]) => p === found)?.[1] ?? name, preview, x: r.left, y: r.bottom + 4 };
     }, 300);
@@ -70,6 +75,7 @@
 
   function onOut(e: MouseEvent) {
     if (!linkUnder(e)) return;
+    hoverGen++;
     clearTimeout(hoverTimer);
     hover = null;
   }
@@ -153,6 +159,7 @@
         onblur={() => app.save(doc)}
         onFollow={follow}
         onPassageLink={(_f, _t, query) => openLinkPicker(query, null, true)}
+        onError={(e) => app.say(errorMessage(e))}
         tags={() => tagList}
         {image}
         indent={app.config?.editor.indent ?? 2}
