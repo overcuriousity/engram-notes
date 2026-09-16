@@ -31,7 +31,6 @@ notify = "8"
 notify-debouncer-full = "0.7"
 fastembed = { version = "6.1", optional = true, default-features = false, features = [
   "ort-download-binaries-rustls-tls",
-  "hf-hub-rustls-tls",
 ] }
 
 [dev-dependencies]

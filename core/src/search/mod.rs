@@ -17,6 +17,8 @@ pub struct Hit {
     pub line: u32,
     /// Cosine of the best passage; `None` when only full-text found it.
     pub similarity: Option<f32>,
+    /// The cross-encoder's score in `(0, 1)`, where reranking ran.
+    pub rerank: Option<f32>,
     /// The fused rank score, for ordering only.
     pub score: f64,
     pub past_divider: bool,
@@ -56,10 +58,21 @@ fn escape_html(s: &str) -> String {
 /// anything showing passage text shows a lead instead of the body.
 const LEAD_CHARS: usize = 200;
 
+/// What the cross-encoder reads of a passage. Its cost is linear in characters
+/// times pairs, and a note's important part is at its beginning: 20 pairs of
+/// this length are one search's budget on a modest CPU (`docs/memory.md`).
+pub const RERANK_CHARS: usize = 600;
+
 /// The first line's worth of `text`, flattened, cut on a word boundary.
 pub(crate) fn lead(text: &str) -> String {
+    head(text, LEAD_CHARS)
+}
+
+/// The first `chars` of `text`, flattened, cut on a word boundary with an
+/// ellipsis where something was cut.
+fn head(text: &str, chars: usize) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let Some((hard, _)) = flat.char_indices().nth(LEAD_CHARS) else {
+    let Some((hard, _)) = flat.char_indices().nth(chars) else {
         return flat;
     };
     let at = flat[..hard].rfind(' ').unwrap_or(hard);
@@ -70,17 +83,21 @@ pub(crate) fn lead(text: &str) -> String {
 /// drawn, priming applied and associated notes spread beneath it.
 ///
 /// `query_vec` is `None` while no model is loaded; the full-text branch alone
-/// then answers, which is why search works during the first download.
+/// then answers, which is why search works while the models load.
+// Two model handles, two configs, a clock and a limit: each is a distinct
+// input the caller owns, and a struct would only rename the list.
+#[allow(clippy::too_many_arguments)]
 pub fn hybrid(
     index: &Index,
     query: &str,
     query_vec: Option<&[f32]>,
+    reranker: Option<&mut dyn crate::embed::Reranker>,
     cfg: &SearchConfig,
     mem: &MemoryConfig,
     at: i64,
     limit: usize,
 ) -> Result<SearchResults> {
-    let hits = hybrid_hits(index, query, query_vec, cfg, mem, at, limit)?;
+    let hits = hybrid_hits(index, query, query_vec, reranker, cfg, mem, at, limit)?;
     let associated = match mem.enabled && !hits.is_empty() {
         true => crate::memory::spread::spread(index, &hits, mem, at)?,
         false => vec![],
@@ -90,10 +107,14 @@ pub fn hybrid(
 
 /// `hybrid` without the spread: what link completion wants, since it lists
 /// notes the query itself found and never their associates.
+// Two model handles, two configs, a clock and a limit: each is a distinct
+// input the caller owns, and a struct would only rename the list.
+#[allow(clippy::too_many_arguments)]
 pub fn hybrid_hits(
     index: &Index,
     query: &str,
     query_vec: Option<&[f32]>,
+    reranker: Option<&mut dyn crate::embed::Reranker>,
     cfg: &SearchConfig,
     mem: &MemoryConfig,
     at: i64,
@@ -122,9 +143,15 @@ pub fn hybrid_hits(
         fts.iter().map(|h| (h.path.as_str(), h)).collect();
     let titles: HashMap<String, String> = index.titles()?.into_iter().collect();
 
+    // With a reranker, more than `limit` fused entries are built so a note at
+    // fused rank 15 can be lifted into a list of 10.
+    let build = match reranker.is_some() {
+        true => limit.max(cfg.rerank_n),
+        false => limit,
+    };
     let mut hits: Vec<Hit> = fuse::rrf(&[dense, sparse], cfg.rrf_k)
         .into_iter()
-        .take(limit)
+        .take(build)
         .map(|(path, score)| {
             let passage = best.get(&path);
             let text = by_path.get(path.as_str());
@@ -139,6 +166,7 @@ pub fn hybrid_hits(
                     .or(text.map(|h| h.line))
                     .unwrap_or(1),
                 similarity: passage.map(|p| p.similarity),
+                rerank: None,
                 score,
                 past_divider: false,
                 primed: false,
@@ -147,12 +175,54 @@ pub fn hybrid_hits(
         })
         .collect();
 
+    if let Some(r) = reranker {
+        rerank(index, query, r, &mut hits, &best, cfg.rerank_n)?;
+    }
+    hits.truncate(limit);
+
     if mem.enabled {
         let activation = index.activation_map(at, mem.activation_half_life_days)?;
         crate::memory::prime::prime(&mut hits, &activation, mem.prime_margin, mem.prime_lift);
     }
     fuse::mark_past_divider(&mut hits, cfg);
     Ok(hits)
+}
+
+/// Rescore the first `n` hits with the cross-encoder and put them in its
+/// order; the rest keep fusion order beneath. A reranker that fails leaves the
+/// list as it was: the failure is the shell's to report, not the search's.
+fn rerank(
+    index: &Index,
+    query: &str,
+    reranker: &mut dyn crate::embed::Reranker,
+    hits: &mut [Hit],
+    best: &HashMap<String, vector::VecHit>,
+    n: usize,
+) -> Result<()> {
+    let n = n.min(hits.len());
+    if n == 0 {
+        return Ok(());
+    }
+    let mut texts = Vec::with_capacity(n);
+    for h in &hits[..n] {
+        let text = match best.get(&h.path) {
+            Some(p) => p.text.clone(),
+            None => index.passage_text(&h.path)?.unwrap_or_default(),
+        };
+        texts.push(head(&text, RERANK_CHARS));
+    }
+    let Ok(scores) = reranker.score(query, &texts) else {
+        return Ok(());
+    };
+    if scores.len() != n {
+        return Ok(());
+    }
+    for (h, s) in hits[..n].iter_mut().zip(scores) {
+        h.rerank = Some(s);
+    }
+    // Stable, so equal scores keep fusion order.
+    hits[..n].sort_by(|a, b| b.rerank.unwrap().total_cmp(&a.rerank.unwrap()));
+    Ok(())
 }
 
 #[cfg(test)]
@@ -214,6 +284,7 @@ mod tests {
             &ix,
             "ownership",
             Some(&q),
+            None,
             &SearchConfig::default(),
             &MemoryConfig::default(),
             0,
@@ -237,6 +308,7 @@ mod tests {
         let out = hybrid(
             &ix,
             "kettle",
+            None,
             None,
             &SearchConfig::default(),
             &MemoryConfig::default(),
@@ -263,6 +335,7 @@ mod tests {
             &ix,
             "ownership",
             Some(&q),
+            None,
             &SearchConfig::default(),
             &cfg,
             0,
@@ -284,6 +357,7 @@ mod tests {
             &ix,
             "ownership rules",
             Some(&q),
+            None,
             &SearchConfig::default(),
             &cfg,
             0,
@@ -308,6 +382,7 @@ mod tests {
             &ix,
             "  ",
             None,
+            None,
             &SearchConfig::default(),
             &MemoryConfig::default(),
             0,
@@ -315,5 +390,139 @@ mod tests {
         )
         .unwrap();
         assert_eq!(out, SearchResults::default());
+    }
+    /// Scores by a fixed table, so the test decides the order the reranker wants.
+    struct Table(std::collections::HashMap<&'static str, f32>);
+    impl crate::embed::Reranker for Table {
+        fn id(&self) -> String {
+            "table".into()
+        }
+        fn score(&mut self, _q: &str, docs: &[String]) -> crate::Result<Vec<f32>> {
+            Ok(docs
+                .iter()
+                .map(|d| {
+                    self.0
+                        .iter()
+                        .find(|(k, _)| d.contains(**k))
+                        .map_or(0.0, |(_, v)| *v)
+                })
+                .collect())
+        }
+    }
+
+    fn plain(ix: &Index, q: &str, r: Option<&mut dyn crate::embed::Reranker>) -> SearchResults {
+        hybrid(
+            ix,
+            q,
+            None,
+            r,
+            &SearchConfig::default(),
+            &MemoryConfig::default(),
+            0,
+            10,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn the_reranker_reorders_the_top_hits_and_marks_their_scores() {
+        let (_d, ix, _e) = vault_with_vectors();
+        // Full text alone finds Coffee (kettle water grind beans) and Tea
+        // (leaves steep water) for "water"; the table prefers whichever fusion
+        // put second, so the order can only come from the scores.
+        let second = plain(&ix, "water", None).hits[1].path.clone();
+        let (hi, lo) = match second.as_str() {
+            "Tea.md" => ("steep", "kettle"),
+            _ => ("kettle", "steep"),
+        };
+        let mut table = Table([(hi, 0.9f32), (lo, 0.05f32)].into_iter().collect());
+        let out = plain(&ix, "water", Some(&mut table));
+        let paths: Vec<&str> = out.hits.iter().map(|h| h.path.as_str()).collect();
+        assert_eq!(paths[0], second, "{paths:?}");
+        assert_eq!(paths.len(), 2);
+        assert_eq!(out.hits[0].rerank, Some(0.9));
+        assert_eq!(out.hits[1].rerank, Some(0.05));
+        // The divider reads the rerank score: 0.05 is under the floor.
+        assert!(!out.hits[0].past_divider);
+        assert!(out.hits[1].past_divider);
+        // Cosine is untouched: nothing dense ran.
+        assert!(out.hits.iter().all(|h| h.similarity.is_none()));
+    }
+
+    #[test]
+    fn without_a_reranker_hits_carry_no_rerank_score() {
+        let (_d, ix, _e) = vault_with_vectors();
+        let out = plain(&ix, "water", None);
+        assert_eq!(out.hits.len(), 2);
+        assert!(out.hits.iter().all(|h| h.rerank.is_none()));
+    }
+
+    #[test]
+    fn a_failing_reranker_leaves_fusion_order_and_no_scores() {
+        struct Broken;
+        impl crate::embed::Reranker for Broken {
+            fn id(&self) -> String {
+                "broken".into()
+            }
+            fn score(&mut self, _: &str, _: &[String]) -> crate::Result<Vec<f32>> {
+                Err(crate::Error::Embed("down".into()))
+            }
+        }
+        let (_d, ix, _e) = vault_with_vectors();
+        let mut broken = Broken;
+        let out = plain(&ix, "water", Some(&mut broken));
+        assert_eq!(out.hits.len(), 2);
+        assert!(out.hits.iter().all(|h| h.rerank.is_none()));
+    }
+
+    #[test]
+    fn the_reranker_reads_the_lead_of_a_passage() {
+        struct Lengths(Vec<usize>);
+        impl crate::embed::Reranker for Lengths {
+            fn id(&self) -> String {
+                "lengths".into()
+            }
+            fn score(&mut self, _: &str, docs: &[String]) -> crate::Result<Vec<f32>> {
+                self.0 = docs.iter().map(|d| d.chars().count()).collect();
+                Ok(vec![0.5; docs.len()])
+            }
+        }
+        let d = tempfile::tempdir().unwrap();
+        fs::write(
+            d.path().join("Long.md"),
+            format!("# Long\n{}", "water ".repeat(300)),
+        )
+        .unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        let mut seen = Lengths(vec![]);
+        let out = plain(&ix, "water", Some(&mut seen));
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(seen.0.len(), 1);
+        assert!(seen.0[0] <= RERANK_CHARS + 1, "{}", seen.0[0]);
+    }
+
+    #[test]
+    fn rerank_n_bounds_what_is_rescored() {
+        let (_d, ix, _e) = vault_with_vectors();
+        let mut table = Table([("steep", 0.9f32)].into_iter().collect());
+        let cfg = SearchConfig {
+            rerank_n: 1,
+            ..SearchConfig::default()
+        };
+        let out = hybrid_hits(
+            &ix,
+            "water",
+            None,
+            Some(&mut table),
+            &cfg,
+            &MemoryConfig::default(),
+            0,
+            10,
+        )
+        .unwrap();
+        // Only the first fused hit was scored; the second keeps its place.
+        assert_eq!(out.iter().filter(|h| h.rerank.is_some()).count(), 1);
     }
 }

@@ -62,6 +62,7 @@ pub fn run() {
             commands::typing,
             commands::semantic_edges,
             commands::set_model_dir,
+            commands::set_reranker_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running engram-notes");

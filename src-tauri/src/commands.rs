@@ -116,12 +116,7 @@ pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdRe
         *slot = std::sync::Arc::new(crate::embed::Embed::default());
         slot.clone()
     };
-    crate::embed::spawn(
-        app.clone(),
-        embed,
-        cfg.embed.clone(),
-        config::data_dir()?.join("models"),
-    );
+    crate::embed::spawn(app.clone(), embed, cfg.embed.clone(), cfg.search.clone());
 
     Ok(VaultInfo {
         root,
@@ -373,55 +368,139 @@ pub fn set_property(
 
 #[tauri::command]
 pub fn search(
+    app: AppHandle,
     state: State<AppState>,
     query: String,
     limit: Option<usize>,
 ) -> CmdResult<SearchResults> {
+    let embed = state.embed.lock().unwrap().clone();
     // The query vector is taken before the index lock, and only if a model is up.
     let vector = {
-        let embed = state.embed.lock().unwrap().clone();
         let mut guard = embed.embedder.lock().unwrap();
         guard.as_mut().and_then(|m| m.embed_query(&query).ok())
     };
-    with_open(&state, |o| {
-        Ok(engram_core::search::hybrid(
+    // Reranker, then index: the embed thread never takes the reranker lock
+    // while it holds the index, so there is no cycle.
+    let mut reranker = embed.reranker.lock().unwrap();
+    let n = embed.rerank_n.load(std::sync::atomic::Ordering::Relaxed);
+    let (out, budget_ms) = with_open(&state, |o| {
+        let search = engram_core::config::SearchConfig {
+            rerank_n: n,
+            ..o.config.search.clone()
+        };
+        let out = engram_core::search::hybrid(
             &o.index,
             &query,
             vector.as_deref(),
-            &o.config.search,
+            reranker
+                .as_mut()
+                .map(|r| r as &mut dyn engram_core::embed::Reranker),
+            &search,
             &o.config.memory,
             now(),
             limit.unwrap_or(50),
-        )?)
-    })
+        )?;
+        Ok((out, o.config.search.rerank_budget_ms))
+    })?;
+    hold_to_budget(&app, &embed, &mut reranker, n, budget_ms);
+    Ok(out)
 }
 
+/// What one run costs the reranker. Over budget the batch halves, and under
+/// `RERANK_MIN` reranking goes off for the session; a failure is reported. The
+/// list stays in fusion order either way.
+///
+/// The readings are taken, not read: a search that matched nothing never
+/// reached the cross-encoder, and the run before it must not be measured twice
+/// -- two queries that find nothing would otherwise halve the batch away on
+/// one slow run.
+fn hold_to_budget(
+    app: &AppHandle,
+    embed: &std::sync::Arc<crate::embed::Embed>,
+    reranker: &mut Option<engram_core::embed::TimedReranker>,
+    n: usize,
+    budget_ms: u64,
+) {
+    let Some(r) = reranker.as_mut() else { return };
+    let ms = r.take_last().map(|d| d.as_millis() as u64);
+    if let Some(e) = r.take_last_error() {
+        *reranker = None;
+        crate::embed::publish_live(app, embed, |s| {
+            s.rerank = "error";
+            s.error = Some(e);
+            s.rerank_n = None;
+        });
+    } else if ms.is_some_and(|ms| ms > budget_ms) {
+        if n / 2 < crate::embed::RERANK_MIN {
+            *reranker = None;
+            crate::embed::publish_live(app, embed, |s| {
+                s.rerank = "slow";
+                s.rerank_ms = ms;
+                s.rerank_n = None;
+            });
+        } else {
+            embed
+                .rerank_n
+                .store(n / 2, std::sync::atomic::Ordering::Relaxed);
+            crate::embed::publish_live(app, embed, |s| {
+                s.rerank_ms = ms;
+                s.rerank_n = Some(n / 2);
+            });
+        }
+    } else if let Some(ms) = ms {
+        crate::embed::publish_live(app, embed, |s| s.rerank_ms = Some(ms));
+    }
+}
+
+/// `rerank` is the passage picker's: it asks once and waits for the better
+/// order. `[[` completion leaves it off -- it runs a keystroke at a time.
 #[tauri::command]
 pub fn link_candidates(
+    app: AppHandle,
     state: State<AppState>,
     query: String,
     limit: Option<usize>,
+    rerank: Option<bool>,
 ) -> CmdResult<Vec<LinkCandidate>> {
+    let embed = state.embed.lock().unwrap().clone();
     // One or two characters say nothing by meaning, and this runs a keystroke at
     // a time behind the embedder's lock; below that the spelling branch answers.
     let vector = if query.trim().chars().count() < 3 {
         None
     } else {
-        let embed = state.embed.lock().unwrap().clone();
         let mut guard = embed.embedder.lock().unwrap();
         guard.as_mut().and_then(|m| m.embed_query(&query).ok())
     };
-    with_open(&state, |o| {
-        Ok(engram_core::search::candidates::link_candidates(
+    // Reranker, then index, as in `search`: the one lock order there is.
+    let mut reranker = match rerank.unwrap_or(false) {
+        true => Some(embed.reranker.lock().unwrap()),
+        false => None,
+    };
+    let n = embed.rerank_n.load(std::sync::atomic::Ordering::Relaxed);
+    let (out, budget_ms) = with_open(&state, |o| {
+        let search = engram_core::config::SearchConfig {
+            rerank_n: n,
+            ..o.config.search.clone()
+        };
+        let out = engram_core::search::candidates::link_candidates(
             &o.index,
             &query,
             vector.as_deref(),
-            &o.config.search,
+            reranker
+                .as_mut()
+                .and_then(|g| g.as_mut())
+                .map(|r| r as &mut dyn engram_core::embed::Reranker),
+            &search,
             &o.config.memory,
             now(),
             limit.unwrap_or(20),
-        )?)
-    })
+        )?;
+        Ok((out, o.config.search.rerank_budget_ms))
+    })?;
+    if let Some(guard) = reranker.as_mut() {
+        hold_to_budget(&app, &embed, guard, n, budget_ms);
+    }
+    Ok(out)
 }
 
 #[tauri::command]
@@ -577,21 +656,42 @@ pub fn typing(state: State<AppState>) {
     *embed.typing.lock().unwrap() = Some(std::time::Instant::now());
 }
 
-/// A folder with the ONNX file and tokenizer, or `None` to download again.
-#[tauri::command]
-pub fn set_model_dir(app: AppHandle, state: State<AppState>, dir: Option<String>) -> CmdResult<()> {
-    let cfg = with_open(&state, |o| {
-        o.config.embed.model_dir = dir;
-        config::save_config(&o.vault, &o.config)?;
-        Ok(o.config.embed.clone())
-    })?;
+/// Stops the embed thread and starts one over the config as it now stands.
+fn restart_embed(app: AppHandle, state: &State<AppState>, cfg: &AppConfig) {
     let embed = {
         let mut slot = state.embed.lock().unwrap();
         slot.stop();
         *slot = std::sync::Arc::new(crate::embed::Embed::default());
         slot.clone()
     };
-    crate::embed::spawn(app, embed, cfg, config::data_dir()?.join("models"));
+    crate::embed::spawn(app, embed, cfg.embed.clone(), cfg.search.clone());
+}
+
+/// A folder with the ONNX file and tokenizer, or `None` for the bundled model.
+#[tauri::command]
+pub fn set_model_dir(app: AppHandle, state: State<AppState>, dir: Option<String>) -> CmdResult<()> {
+    let cfg = with_open(&state, |o| {
+        o.config.embed.model_dir = dir;
+        config::save_config(&o.vault, &o.config)?;
+        Ok(o.config.clone())
+    })?;
+    restart_embed(app, &state, &cfg);
+    Ok(())
+}
+
+/// The same for the reranker.
+#[tauri::command]
+pub fn set_reranker_dir(
+    app: AppHandle,
+    state: State<AppState>,
+    dir: Option<String>,
+) -> CmdResult<()> {
+    let cfg = with_open(&state, |o| {
+        o.config.embed.reranker_dir = dir;
+        config::save_config(&o.vault, &o.config)?;
+        Ok(o.config.clone())
+    })?;
+    restart_embed(app, &state, &cfg);
     Ok(())
 }
 
@@ -903,6 +1003,7 @@ mod tests {
             snippet: "<mark>a</mark>".into(),
             line: 3,
             similarity: Some(0.8),
+            rerank: Some(0.7),
             score: 0.5,
             past_divider: true,
             primed: false,
@@ -919,6 +1020,11 @@ mod tests {
         let status = serde_json::to_value(crate::embed::EmbedStatus::default()).unwrap();
         assert_eq!(status["state"], "off");
         assert_eq!(status["pending"], 0);
+        assert_eq!(status["rerank"], "off");
+        assert!(status["rerank_ms"].is_null());
+        assert!(status["rerank_n"].is_null());
+        let rerank = json["hits"][0]["rerank"].as_f64().unwrap();
+        assert!((rerank - 0.7).abs() < 1e-6, "{rerank}");
     }
 
     #[test]

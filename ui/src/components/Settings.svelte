@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app } from "../lib/state.svelte";
-  import { errorMessage, forgetMemory, openExternal, setConfig, setModelDir } from "../lib/api";
+  import { errorMessage, forgetMemory, openExternal, setConfig, setModelDir, setRerankerDir } from "../lib/api";
   import { toggleSnippet } from "../lib/snippets";
   import { open } from "@tauri-apps/plugin-dialog";
   import X from "@lucide/svelte/icons/x";
@@ -37,6 +37,13 @@
     if (typeof dir !== "string" || !cfg) return;
     cfg.embed.model_dir = dir;
     await setModelDir(dir);
+  }
+
+  async function pickReranker() {
+    const dir = await open({ directory: true });
+    if (typeof dir !== "string" || !cfg) return;
+    cfg.embed.reranker_dir = dir;
+    await setRerankerDir(dir);
   }
 </script>
 
@@ -116,8 +123,10 @@
         {@render row("Memory", "Learn from what is opened together and rank it higher.", memory)}
         {#snippet floor()}<input type="number" min="0" max="1" step="0.01" bind:value={cfg.search.similarity_floor} onchange={save} />{/snippet}
         {@render row("Similarity floor", "Below this cosine a semantic match is not shown.", floor)}
-        {#snippet model()}<button class="pick" onclick={pickModel}>{cfg.embed.model_dir ?? "Downloaded"}</button>{/snippet}
-        {@render row("Embedding model folder", "A local copy of the model; the default is downloaded.", model)}
+        {#snippet model()}<button class="pick" onclick={pickModel}>{cfg.embed.model_dir ?? "Bundled"}</button>{/snippet}
+        {@render row("Embedding model folder", "A folder with model.onnx and its tokenizer; the default ships with the app.", model)}
+        {#snippet reranker()}<button class="pick" onclick={pickReranker}>{cfg.embed.reranker_dir ?? "Bundled"}</button>{/snippet}
+        {@render row("Reranker model folder", "A cross-encoder in the same shape; the default ships with the app.", reranker)}
         {#snippet forget()}<button class="pick" onclick={async () => { await forgetMemory(); app.say("Memory forgotten."); }}>Forget everything</button>{/snippet}
         {@render row("Learned links", "Drop everything memory has learned.", forget)}
       </div>

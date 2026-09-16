@@ -46,11 +46,18 @@
     <span>{chars} characters</span>
   {/if}
   {#if embed.state === "loading"}
-    <span>downloading model</span>
+    <span>loading model</span>
   {:else if embed.state === "error"}
     <span title={embed.error ?? ""}>embedding off</span>
   {:else if embed.pending > 0}
     <span>{embed.pending} passages pending</span>
+  {/if}
+  {#if embed.state === "ready" && embed.rerank === "slow"}
+    <span title="The cross-encoder took longer than the budget, so search uses fusion order.">
+      reranking off: {((embed.rerank_ms ?? 0) / 1000).toFixed(1)} s on this machine
+    </span>
+  {:else if embed.state === "ready" && embed.rerank === "error"}
+    <span title={embed.error ?? ""}>reranking off</span>
   {/if}
   <button onclick={toggleMemory} title={memory ? "Memory is on" : "Memory is off"}>
     {memory ? "memory on" : "memory off"}

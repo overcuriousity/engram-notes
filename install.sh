@@ -59,13 +59,19 @@ fetch "$asset.sha256"
 (cd "$tmp" && $checksum < "$asset.sha256" >/dev/null) ||
   die "checksum mismatch — refusing to install"
 
-case "$asset" in
-  *.tar.gz) tar -xzf "$tmp/$asset" -C "$tmp"; built=$tmp/engram-notes ;;
-  *) built=$tmp/$asset ;;
-esac
-
 mkdir -p "$bin_dir"
-install -m 755 "$built" "$bin_dir/engram-notes"
+case "$asset" in
+  *.tar.gz)
+    # The binary looks for its models in ../lib/engram-notes beside its bin/.
+    tar -xzf "$tmp/$asset" -C "$tmp"
+    lib_dir=$(dirname "$bin_dir")/lib/engram-notes
+    rm -rf "$lib_dir"
+    mkdir -p "$lib_dir"
+    cp -r "$tmp/lib/engram-notes/." "$lib_dir/"
+    install -m 755 "$tmp/bin/engram-notes" "$bin_dir/engram-notes"
+    printf 'engram-notes: models installed to %s\n' "$lib_dir" ;;
+  *) install -m 755 "$tmp/$asset" "$bin_dir/engram-notes" ;;
+esac
 printf 'engram-notes: installed to %s/engram-notes\n' "$bin_dir"
 
 case ":$PATH:" in

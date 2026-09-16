@@ -10,13 +10,13 @@ export interface AppConfig {
   hotkeys: Record<string, string>;
   theme: "system" | "light" | "dark";
   css_snippets: string[];
-  search: { candidate_multiplier: number; rrf_k: number; cliff_factor: number; cliff_min_share: number; similarity_floor: number };
+  search: { candidate_multiplier: number; rrf_k: number; cliff_factor: number; cliff_min_share: number; similarity_floor: number; rerank_n: number; rerank_floor: number; rerank_budget_ms: number };
   memory: {
     enabled: boolean; activation_half_life_days: number; assoc_half_life_days: number;
     sitting_gap_secs: number; assoc_window_secs: number; assoc_show: number;
     prime_margin: number; prime_lift: number; spread_max: number;
   };
-  embed: { model_dir: string | null; batch: number };
+  embed: { model_dir: string | null; reranker_dir: string | null; batch: number };
 }
 export interface Snippet { name: string; css: string; error?: string | null }
 export interface VaultInfo { root: string; config: AppConfig; stats: RebuildStats; index_recreated: boolean; watch_error: string | null }
@@ -30,14 +30,17 @@ export interface TagCount { tag: string; count: number }
 export interface PropertyCount { key: string; count: number }
 export interface Hit {
   path: string; title: string; snippet: string; line: number;
-  similarity: number | null; score: number; past_divider: boolean; primed: boolean;
+  similarity: number | null; rerank: number | null; score: number; past_divider: boolean; primed: boolean;
 }
 export interface Associated { path: string; title: string; via: string; cue: string | null; strength: number }
 export interface SearchResults { hits: Hit[]; associated: Associated[] }
 export interface SimilarNote { path: string; title: string; text: string; similarity: number }
 export interface Related { associated: Associated[]; similar: SimilarNote[]; suggested: SimilarNote[] }
 export interface SemanticEdge { source: string; target: string; weight: number; kind: "assoc" | "similar" }
-export interface EmbedStatus { model: string | null; state: "off" | "loading" | "ready" | "error"; pending: number; error: string | null }
+export interface EmbedStatus {
+  model: string | null; state: "off" | "loading" | "ready" | "error"; pending: number; error: string | null;
+  rerank: "off" | "loading" | "ready" | "slow" | "error"; rerank_ms: number | null; rerank_n: number | null;
+}
 export type EventKind = "open" | "open_from_search" | "follow_link" | "search"
 export interface RenamePlan { from: string; to: string; affected: string[] }
 export interface Change { path: string; kind: "changed" | "removed" }
@@ -81,6 +84,7 @@ export const semanticEdges = (paths: string[] | null, topK = 3) =>
 export const embedStatus = () => invoke<EmbedStatus>("embed_status");
 export const typing = () => invoke<void>("typing");
 export const setModelDir = (dir: string | null) => invoke<void>("set_model_dir", { dir });
+export const setRerankerDir = (dir: string | null) => invoke<void>("set_reranker_dir", { dir });
 export const getConfig = () => invoke<AppConfig>("get_config");
 export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
 export const getWorkspace = () => invoke<Record<string, unknown>>("get_workspace");
@@ -100,7 +104,9 @@ export const anchorLine = (path: string, fragment: string) => invoke<number | nu
 export interface LinkCandidate { path: string; title: string; kind: "text" | "meaning"; primed: boolean }
 export interface Block { kind: "heading" | "list" | "paragraph"; first: number; last: number; text: string; heading: string | null }
 export interface Preview { heading: string; text: string }
-export const linkCandidates = (query: string, limit = 20) => invoke<LinkCandidate[]>("link_candidates", { query, limit });
+// `rerank` is the passage picker's: one deliberate lookup that waits for the
+// better order. `[[` completion asks a keystroke at a time and leaves it off.
+export const linkCandidates = (query: string, limit = 20, rerank = false) => invoke<LinkCandidate[]>("link_candidates", { query, limit, rerank });
 export const blocks = (path: string) => invoke<Block[]>("blocks", { path });
 export const anchorBlock = (path: string, first: number, last: number) => invoke<string>("anchor_block", { path, first, last });
 export const linkPreview = (path: string, fragment: string | null) => invoke<Preview | null>("link_preview", { path, fragment });

@@ -8,8 +8,31 @@ places it does not follow the spec.
 Full-text (FTS5 BM25, title weighted 10) and semantic (cosine over every
 passage vector) each fetch `limit × 3` candidates. Reciprocal rank fusion with
 `k = 60` folds them into one list, one entry per note, its best passage as the
-snippet. With no model loaded the full-text branch answers alone, which is why
-search works while the model downloads.
+snippet. For a deliberate search (Ctrl+K, the search pane) and the passage
+picker, a cross-encoder then rescores the top `rerank_n` (20) fused entries
+against the query and puts them in its order; the rest keep fusion order
+beneath. The divider reads each hit by the score it has: the rerank score
+against `rerank_floor` (0.1) for the entries that were rescored, the cosine
+against `similarity_floor` for the tail the cross-encoder never reached. `[[`
+completion never reranks: it answers keystrokes. With no model loaded the
+full-text branch answers alone, which is why search works while the models
+load.
+
+Both models ship inside the app as resources: `multilingual-e5-small` and
+`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`, each dynamically quantised to
+int8, about 260 MB together. Nothing is downloaded and nothing in the binary
+can open a connection.
+
+The cross-encoder's cost is linear in characters times pairs. Measured on
+the build machine (4 cores, AVX2, no AVX-512): 20 pairs of 1 200 characters
+3.9 s, 20 of 600 1.6 s, 10 of 600 0.5 s. So the reranker reads the first 600
+characters of a passage, and the 500 ms budget (`rerank_budget_ms`) is
+enforced by measurement, since a run cannot be interrupted: on load a
+synthetic batch of `rerank_n` leads is scored and halved until a run fits,
+on a thread of its own so the passage queue is not held up; on every query a
+run over budget halves it again, each run measured once. Under five pairs
+reranking switches off for the session and the status bar names the time.
+`rerank_n` in the status is the batch a search rescores now.
 
 A passage is the note's body after the frontmatter, truncated at the end at
 1 200 characters on a whitespace boundary: one vector per note, since a
