@@ -116,12 +116,7 @@ pub fn open_vault(app: AppHandle, state: State<AppState>, path: String) -> CmdRe
         *slot = std::sync::Arc::new(crate::embed::Embed::default());
         slot.clone()
     };
-    crate::embed::spawn(
-        app.clone(),
-        embed,
-        cfg.embed.clone(),
-        config::data_dir()?.join("models"),
-    );
+    crate::embed::spawn(app.clone(), embed, cfg.embed.clone(), cfg.search.clone());
 
     Ok(VaultInfo {
         root,
@@ -373,28 +368,56 @@ pub fn set_property(
 
 #[tauri::command]
 pub fn search(
+    app: AppHandle,
     state: State<AppState>,
     query: String,
     limit: Option<usize>,
 ) -> CmdResult<SearchResults> {
+    let embed = state.embed.lock().unwrap().clone();
     // The query vector is taken before the index lock, and only if a model is up.
     let vector = {
-        let embed = state.embed.lock().unwrap().clone();
         let mut guard = embed.embedder.lock().unwrap();
         guard.as_mut().and_then(|m| m.embed_query(&query).ok())
     };
-    with_open(&state, |o| {
-        Ok(engram_core::search::hybrid(
+    // Reranker, then index: the embed thread never takes the reranker lock
+    // while it holds the index, so there is no cycle.
+    let mut reranker = embed.reranker.lock().unwrap();
+    let (out, budget_ms) = with_open(&state, |o| {
+        let out = engram_core::search::hybrid(
             &o.index,
             &query,
             vector.as_deref(),
-            None,
+            reranker
+                .as_mut()
+                .map(|r| r as &mut dyn engram_core::embed::Reranker),
             &o.config.search,
             &o.config.memory,
             now(),
             limit.unwrap_or(50),
-        )?)
-    })
+        )?;
+        Ok((out, o.config.search.rerank_budget_ms))
+    })?;
+    // A run over budget switches reranking off for the session; a failure is
+    // reported and the list stays in fusion order either way.
+    if let Some(r) = reranker.as_ref() {
+        let ms = r.last().map(|d| d.as_millis() as u64);
+        if let Some(e) = r.last_error() {
+            *reranker = None;
+            crate::embed::publish(&app, &embed, |s| {
+                s.rerank = "error";
+                s.error = Some(e);
+            });
+        } else if ms.is_some_and(|ms| ms > budget_ms) {
+            *reranker = None;
+            crate::embed::publish(&app, &embed, |s| {
+                s.rerank = "slow";
+                s.rerank_ms = ms;
+            });
+        } else if let Some(ms) = ms {
+            crate::embed::publish(&app, &embed, |s| s.rerank_ms = Some(ms));
+        }
+    }
+    Ok(out)
 }
 
 #[tauri::command]
@@ -578,21 +601,42 @@ pub fn typing(state: State<AppState>) {
     *embed.typing.lock().unwrap() = Some(std::time::Instant::now());
 }
 
-/// A folder with the ONNX file and tokenizer, or `None` to download again.
-#[tauri::command]
-pub fn set_model_dir(app: AppHandle, state: State<AppState>, dir: Option<String>) -> CmdResult<()> {
-    let cfg = with_open(&state, |o| {
-        o.config.embed.model_dir = dir;
-        config::save_config(&o.vault, &o.config)?;
-        Ok(o.config.embed.clone())
-    })?;
+/// Stops the embed thread and starts one over the config as it now stands.
+fn restart_embed(app: AppHandle, state: &State<AppState>, cfg: &AppConfig) {
     let embed = {
         let mut slot = state.embed.lock().unwrap();
         slot.stop();
         *slot = std::sync::Arc::new(crate::embed::Embed::default());
         slot.clone()
     };
-    crate::embed::spawn(app, embed, cfg, config::data_dir()?.join("models"));
+    crate::embed::spawn(app, embed, cfg.embed.clone(), cfg.search.clone());
+}
+
+/// A folder with the ONNX file and tokenizer, or `None` for the bundled model.
+#[tauri::command]
+pub fn set_model_dir(app: AppHandle, state: State<AppState>, dir: Option<String>) -> CmdResult<()> {
+    let cfg = with_open(&state, |o| {
+        o.config.embed.model_dir = dir;
+        config::save_config(&o.vault, &o.config)?;
+        Ok(o.config.clone())
+    })?;
+    restart_embed(app, &state, &cfg);
+    Ok(())
+}
+
+/// The same for the reranker.
+#[tauri::command]
+pub fn set_reranker_dir(
+    app: AppHandle,
+    state: State<AppState>,
+    dir: Option<String>,
+) -> CmdResult<()> {
+    let cfg = with_open(&state, |o| {
+        o.config.embed.reranker_dir = dir;
+        config::save_config(&o.vault, &o.config)?;
+        Ok(o.config.clone())
+    })?;
+    restart_embed(app, &state, &cfg);
     Ok(())
 }
 
@@ -921,6 +965,10 @@ mod tests {
         let status = serde_json::to_value(crate::embed::EmbedStatus::default()).unwrap();
         assert_eq!(status["state"], "off");
         assert_eq!(status["pending"], 0);
+        assert_eq!(status["rerank"], "off");
+        assert!(status["rerank_ms"].is_null());
+        let rerank = json["hits"][0]["rerank"].as_f64().unwrap();
+        assert!((rerank - 0.7).abs() < 1e-6, "{rerank}");
     }
 
     #[test]
