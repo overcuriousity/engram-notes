@@ -183,35 +183,6 @@ pub fn heading_key(text: &str) -> String {
     heading_fragment(text).to_lowercase()
 }
 
-/// Query terms: lowercased words of two characters or more.
-fn terms(query: &str) -> Vec<String> {
-    let mut t: Vec<String> = query
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| w.chars().count() >= 2)
-        .map(|w| w.to_lowercase())
-        .collect();
-    t.sort();
-    t.dedup();
-    t
-}
-
-/// The block with the most distinct query terms in it; ties to the earlier.
-pub fn best_block(blocks: &[Block], query: &str) -> Option<usize> {
-    let terms = terms(query);
-    if terms.is_empty() {
-        return None;
-    }
-    let mut best: Option<(usize, usize)> = None;
-    for (i, b) in blocks.iter().enumerate() {
-        let text = b.text.to_lowercase();
-        let n = terms.iter().filter(|t| text.contains(t.as_str())).count();
-        if n > 0 && best.is_none_or(|(_, m)| n > m) {
-            best = Some((i, n));
-        }
-    }
-    best.map(|(i, _)| i)
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Anchored {
     pub text: String,
@@ -444,23 +415,6 @@ mod tests {
     #[test]
     fn an_empty_body_has_no_blocks() {
         assert!(blocks("\n\n  \n").is_empty());
-    }
-
-    #[test]
-    fn best_block_is_the_one_with_most_query_terms() {
-        let b = blocks(
-            "# Shells\n\nthe carousel of shell companies\n\n- VAT fraud chain\n- carousel fraud in the EU\n",
-        );
-        assert_eq!(best_block(&b, "carousel fraud"), Some(3));
-        assert_eq!(best_block(&b, "Shell Companies"), Some(1));
-    }
-
-    #[test]
-    fn best_block_ties_go_to_the_earlier_and_no_match_is_none() {
-        let b = blocks("alpha beta\n\nbeta alpha\n");
-        assert_eq!(best_block(&b, "alpha"), Some(0));
-        assert_eq!(best_block(&b, "gamma"), None);
-        assert_eq!(best_block(&b, "a"), None);
     }
 
     fn ids(seq: &[&str]) -> impl FnMut() -> String {

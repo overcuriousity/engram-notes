@@ -65,7 +65,7 @@
     gen++;
     list = found;
     chosen = c;
-    // The block with the most of the query's words, ties to the earlier one; mirrors core's best_block.
+    // The block with the most of the query's words, ties to the earlier one.
     let best = 0, bestN = 0;
     list.forEach((b, j) => { const n = score(b); if (n > bestN) { best = j; bestN = n; } });
     onSel(best);
