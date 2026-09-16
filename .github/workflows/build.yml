@@ -37,6 +37,9 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
       - run: pnpm install --frozen-lockfile
         working-directory: ui
+      - name: Fetch the models
+        shell: bash
+        run: scripts/fetch-models.sh
       # tauri-bundler fetches linuxdeploy and AppRun on first use with a single
       # unretried request, so one 504 from github.com loses the whole build. It
       # skips any tool already in its cache, so seed them with a curl that
@@ -91,7 +94,13 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN=1 "$RUNNER_TEMP/appimagetool" squashfs-root \
             "$GITHUB_WORKSPACE/dist/engram-notes-x86_64.AppImage"
           cd "$GITHUB_WORKSPACE"
-          tar -czf dist/engram-notes-x86_64-unknown-linux-gnu.tar.gz -C target/release engram-notes
+          # A bare binary looks for its models in ../lib/engram-notes beside
+          # its bin/, so the slim tarball is that folder pair.
+          stage=$RUNNER_TEMP/slim
+          mkdir -p "$stage/bin" "$stage/lib/engram-notes"
+          cp target/release/engram-notes "$stage/bin/"
+          cp -r target/release/models "$stage/lib/engram-notes/"
+          tar -czf dist/engram-notes-x86_64-unknown-linux-gnu.tar.gz -C "$stage" bin lib
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64
@@ -114,13 +123,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
         working-directory: ui
+      - name: Fetch the models
+        shell: bash
+        run: scripts/fetch-models.sh
       - run: pnpm tauri build --no-bundle
         working-directory: ui
       - name: Package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path target/release/engram-notes.exe `
+          Compress-Archive -Path target/release/engram-notes.exe, target/release/models `
             -DestinationPath dist/engram-notes-x86_64-pc-windows-msvc.zip -Force
       - uses: actions/upload-artifact@v4
         with:
@@ -155,9 +167,9 @@ jobs:
 
               curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/master/install.sh | sh
 
-          The .tar.gz is the slim binary for machines that already have webkit2gtk 4.1 and GTK 3.
+          The .tar.gz is the slim build for machines that already have webkit2gtk 4.1 and GTK 3: unpack it and keep bin/ and lib/ together.
 
-          **Windows**: download the .zip below and run \`engram-notes.exe\`. Unsigned, so SmartScreen will warn.
+          **Windows**: download the .zip below, unpack it whole and run \`engram-notes.exe\` beside its \`models\` folder. Unsigned, so SmartScreen will warn.
           EOF
 
           gh release delete latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
