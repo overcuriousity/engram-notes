@@ -28,6 +28,15 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # tauri-build refuses a resource glob with no files behind it, so the
+      # models have to be there before anything compiles the shell. Cached on
+      # the script that pins them.
+      - uses: actions/cache@v4
+        with:
+          path: src-tauri/models
+          key: models-${{ hashFiles('scripts/fetch-models.sh') }}
+      - name: Fetch the models
+        run: scripts/fetch-models.sh
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
