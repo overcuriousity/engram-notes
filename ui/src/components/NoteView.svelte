@@ -4,7 +4,9 @@
   import { resolveFile } from "../lib/files";
   import { app } from "../lib/state.svelte";
   import { findPane } from "../lib/layout";
-  import { resolveLink, createNote, anchorLine, tags as apiTags, typing, errorMessage, getFolds, setFolds } from "../lib/api";
+  import { resolveLink, createNote, anchorLine, tags as apiTags, typing, errorMessage, getFolds, setFolds, linkPreview, type Preview } from "../lib/api";
+  import LinkPreview from "./LinkPreview.svelte";
+  import { openLinkPicker } from "../lib/commands";
   import Editor from "./Editor.svelte";
   import Reading from "./Reading.svelte";
   import PropertiesBlock from "./PropertiesBlock.svelte";
@@ -40,6 +42,44 @@
     foldSaid = true;
     app.say(errorMessage(e));
   }
+  // The target passage, shown after the pointer rests on a link; the id is never in it.
+  let hover = $state<{ title: string; preview: Preview; x: number; y: number } | null>(null);
+  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+  // Resolving a link takes two round trips, which outlast the pointer. Without
+  // this the answer to a link already left opens a popover whose `mouseout`
+  // has been and gone, and nothing is left to close it.
+  let hoverGen = 0;
+
+  function linkUnder(e: MouseEvent): HTMLElement | null {
+    return (e.target as HTMLElement).closest?.("a.cm-wikilink, a.wikilink") as HTMLElement | null;
+  }
+
+  function onOver(e: MouseEvent) {
+    const a = linkUnder(e);
+    if (!a?.dataset.target) return;
+    const target = a.dataset.target;
+    clearTimeout(hoverTimer);
+    const gen = ++hoverGen;
+    hoverTimer = setTimeout(async () => {
+      const hash = target.indexOf("#");
+      const name = hash < 0 ? target : target.slice(0, hash);
+      const fragment = hash < 0 ? null : target.slice(hash + 1);
+      const found = await resolveLink(name).catch(() => null);
+      if (!found || gen !== hoverGen) return;
+      const preview = await linkPreview(found, fragment).catch(() => null);
+      if (!preview || gen !== hoverGen) return;
+      const r = a.getBoundingClientRect();
+      hover = { title: app.titles.find(([p]) => p === found)?.[1] ?? name, preview, x: r.left, y: r.bottom + 4 };
+    }, 300);
+  }
+
+  function onOut(e: MouseEvent) {
+    if (!linkUnder(e)) return;
+    hoverGen++;
+    clearTimeout(hoverTimer);
+    hover = null;
+  }
+
   onMount(async () => {
     tagList = (await apiTags()).map((t) => t.tag);
     try {
@@ -98,7 +138,10 @@
       <button onclick={() => app.resolveConflict(doc, true)}>Keep mine</button>
     </div>
   {/if}
-  <div class="note">
+  <!-- A hover preview only; keyboard users follow the link instead. -->
+  <!-- svelte-ignore a11y_mouse_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="note" onmouseover={onOver} onmouseout={onOut}>
     <!-- Source mode shows the file as it is, frontmatter included. -->
     {#if mode !== "source"}<PropertiesBlock {path} />{/if}
     {#if mode === "reading"}
@@ -115,7 +158,8 @@
         onchange={onChange}
         onblur={() => app.save(doc)}
         onFollow={follow}
-        titles={() => app.titles}
+        onPassageLink={(_f, _t, query) => openLinkPicker(query, null, true)}
+        onError={(e) => app.say(errorMessage(e))}
         tags={() => tagList}
         {image}
         indent={app.config?.editor.indent ?? 2}
@@ -123,5 +167,6 @@
         {onFolds}
       />
     {/if}
+    {#if hover}<LinkPreview {...hover} />{/if}
   </div>
 {/if}

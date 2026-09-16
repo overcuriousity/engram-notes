@@ -102,7 +102,6 @@ mod tests {
             path: path.into(),
             title: path.into(),
             snippet: String::new(),
-            heading: None,
             line: 1,
             similarity,
             score: 0.0,

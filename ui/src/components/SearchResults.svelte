@@ -18,7 +18,6 @@
     <button class="linkrow" class:active={i === sel} class:loose={h.past_divider} onclick={() => onOpen(h.path, h.line)}>
       <div class="src">
         {h.title}
-        {#if h.heading}<span class="dim">— {h.heading}</span>{/if}
         {#if h.primed}<span class="badge" title="you reach for this one">primed</span>{/if}
       </div>
       <!-- escaped in core; only <mark> survives -->

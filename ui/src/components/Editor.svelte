@@ -11,9 +11,10 @@
   import { ensureSyntaxTree, foldEffect, indentUnit, unfoldEffect } from "@codemirror/language";
   import { editorTheme, markdownHighlight } from "../editor/theme";
   import { livePreview } from "../editor/livePreview";
-  import { completions } from "../editor/completions";
+  import { completions, type Candidates } from "../editor/completions";
   import { foldKeys, foldRestore, foldTransaction, listOnlyFolding, markdownBrackets, outlineFolding, outlineKeymap } from "../editor/outline";
   import { textDiff } from "../lib/textdiff";
+  import { linkCandidates, type LinkCandidate } from "../lib/api";
 
   interface Props {
     text: string;
@@ -26,7 +27,8 @@
     onchange: (t: string) => void;
     onblur: () => void;
     onFollow: (target: string) => void;
-    titles: () => [string, string][];
+    onPassageLink: (from: number, to: number, query: string) => void;
+    onError: (e: unknown) => void;
     tags: () => string[];
     image: (target: string) => string | null;
     indent: number;
@@ -34,7 +36,7 @@
     folds: string[] | null;
     onFolds: (keys: string[]) => void;
   }
-  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, titles, tags, image, indent, folds, onFolds }: Props = $props();
+  let { text, mode, focus, jump, onJumped, insert, onInserted, onchange, onblur, onFollow, onPassageLink, onError, tags, image, indent, folds, onFolds }: Props = $props();
   let host: HTMLDivElement;
   // State, so effects that need the view run again once it exists.
   let view = $state.raw<EditorView>();
@@ -44,6 +46,43 @@
   // An empty indent unit makes indentUnit throw, which would leave the pane blank.
   const indentSpaces = (n: number) => " ".repeat(Math.min(8, Math.max(1, Math.round(n) || 1)));
   let alive = true;
+  let lastQ: string | null = null;
+  let lastP: Promise<LinkCandidate[]> = Promise.resolve([]);
+  let lastList: LinkCandidate[] = [];
+  let pending: { timer: ReturnType<typeof setTimeout>; keep: (c: LinkCandidate[]) => void } | null = null;
+  // Trailing edge, 80 ms: a query the typing overtook costs no round trip, and
+  // it keeps the last list rather than flickering the popup empty. Every call
+  // embeds the query behind one lock in the shell, so one per pause is the point.
+  function candidateList(q: string): Promise<LinkCandidate[]> {
+    if (q === lastQ) return lastP;
+    lastQ = q;
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.keep(lastList);
+    }
+    lastP = new Promise((res) => {
+      const timer = setTimeout(() => {
+        pending = null;
+        linkCandidates(q).then(
+          (list) => {
+            lastList = list;
+            res(list);
+          },
+          (e) => {
+            // Not cached: the same query typed again should ask again.
+            lastQ = null;
+            onError(e);
+            res(lastList);
+          },
+        );
+      }, 80);
+      pending = { timer, keep: res };
+    });
+    return lastP;
+  }
+  // The popup closing is the one moment nothing on screen depends on the cache,
+  // so it is where a list the vault has outlived is dropped.
+  const candidates: Candidates = Object.assign(candidateList, { reset: () => (lastQ = null) });
 
   onMount(() => {
     view = new EditorView({
@@ -66,7 +105,15 @@
           EditorView.lineWrapping,
           indentComp.of(indentUnit.of(indentSpaces(indent))),
           modeComp.of(forMode(mode)),
-          completions(titles, tags),
+          completions(
+            candidates,
+            (from, to, query) => {
+              // Select the typed `[[^^query` so the picker's link replaces it.
+              view?.dispatch({ selection: { anchor: from, head: to } });
+              onPassageLink(from, to, query);
+            },
+            tags,
+          ),
           keymap.of([...closeBracketsKeymap, ...outlineKeymap, ...markdownKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onchange(u.state.doc.toString());
@@ -91,6 +138,7 @@
     if (focus) view.focus();
     return () => {
       alive = false;
+      if (pending) clearTimeout(pending.timer);
       view?.destroy();
     };
   });

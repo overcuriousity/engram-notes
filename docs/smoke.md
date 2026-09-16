@@ -110,3 +110,21 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
     (`import-report-1.md`) lists every file as already in the vault.
 68. Start the import again and pick a folder inside the vault as the graph:
     it is refused, and nothing is written.
+69. In a note, type `[[carou` where a note about VAT fraud exists but none is
+    named carousel: the popup lists the VAT note marked *meaning* after any
+    spelled matches; Enter writes `[[VAT fraud chain]]`.
+70. Select a sentence, press Ctrl+Shift+K: the picker lists notes; Enter on
+    one lists its blocks with the best one preselected; Enter writes
+    `[[Note#^id|the sentence]]` over the selection and the target's line ends
+    in ` ^id`. Nothing else in the target changed (`git diff`).
+71. Type `[[^^shell`: the picker opens with *shell* as the query; choosing a
+    block replaces the typed `[[^^shell` with `[[Note#^id]]`, no alias.
+72. In the picker choose a heading block: the link is `[[Note#Heading]]` and
+    the target file is unchanged.
+73. Link the same paragraph twice: the second link reuses the first `^id`
+    and the file is not rewritten.
+74. Rest the pointer on a passage link in live preview and in reading mode:
+    after a moment a popover shows the note's title, the heading path and
+    the passage; the `^id` appears nowhere. Moving off hides it.
+75. With the model off (no model folder), `[[` completion still lists notes
+    by spelling and full-text.

@@ -1,9 +1,13 @@
 import type { Graph, GraphNode, SemanticEdge } from "./api";
 import { mergeEdges, type DrawEdge } from "./semantic";
 
+/** One of Obsidian's colour groups: nodes the query matches take the colour. `rgb` is Obsidian's packed 0xRRGGBB. */
+export interface ColorGroup { query: string; color: { a: number; rgb: number } }
+
 /** Obsidian's graph.json keys, plus the local graph's depth. */
 export interface GraphSettings {
   search: string;
+  colorGroups: ColorGroup[];
   showTags: boolean;
   showAttachments: boolean;
   hideUnresolved: boolean;
@@ -25,6 +29,7 @@ export interface GraphSettings {
 // Obsidian's defaults.
 export const DEFAULTS: GraphSettings = {
   search: "",
+  colorGroups: [],
   showTags: false,
   showAttachments: false,
   hideUnresolved: false,
@@ -42,11 +47,39 @@ export const DEFAULTS: GraphSettings = {
   localDepth: 1,
 };
 
+/** A settings object of its own: `DEFAULTS` is module-level and `colorGroups` is edited in place. */
+export function defaultSettings(): GraphSettings {
+  return { ...DEFAULTS, colorGroups: [] };
+}
+
 export function readSettings(raw: Record<string, unknown>): GraphSettings {
   const out: Record<string, unknown> = { ...DEFAULTS };
-  for (const [k, v] of Object.entries(DEFAULTS)) if (typeof raw[k] === typeof v) out[k] = raw[k];
+  for (const [k, v] of Object.entries(DEFAULTS)) if (!Array.isArray(v) && typeof raw[k] === typeof v) out[k] = raw[k];
+  out.colorGroups = readColorGroups(raw.colorGroups);
   return out as unknown as GraphSettings;
 }
+
+/** Obsidian's `colorGroups`, with anything malformed dropped rather than drawn. */
+export function readColorGroups(raw: unknown): ColorGroup[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ColorGroup[] = [];
+  for (const g of raw) {
+    if (!g || typeof g !== "object") continue;
+    const { query, color } = g as { query?: unknown; color?: { a?: unknown; rgb?: unknown } };
+    if (typeof query !== "string" || !color || typeof color !== "object" || typeof color.rgb !== "number") continue;
+    out.push({ query, color: { a: typeof color.a === "number" ? color.a : 1, rgb: color.rgb & 0xffffff } });
+  }
+  return out;
+}
+
+/** Obsidian's packed rgb as CSS. */
+export const hexColor = (rgb: number): string => `#${(rgb & 0xffffff).toString(16).padStart(6, "0")}`;
+
+/** A colour input's `#rrggbb` as Obsidian's packed rgb. */
+export const rgbInt = (hex: string): number => parseInt(hex.replace(/^#/, ""), 16) || 0;
+
+// Obsidian gives a new group a random colour; ours cycle, so a second group is never the first's twin.
+export const GROUP_COLORS = [0xe06c75, 0x61afef, 0x98c379, 0xe5c07b, 0xc678dd, 0x56b6c2, 0xd19a66, 0x7f8c8d];
 
 export interface Search { words: string[]; tags: string[]; paths: string[]; files: string[] }
 
@@ -83,6 +116,21 @@ function matches(n: GraphNode, s: Search, content: Set<string> | null): boolean 
   if (s.files.some((f) => !name.includes(f))) return false;
   if (s.words.length === 0 || content?.has(n.id)) return true;
   return s.words.every((w) => title.includes(w) || path.includes(w));
+}
+
+/** Each node's colour: the first group whose query matches, as Obsidian's higher
+ *  group wins. Words match the title and path only. Colour is painted, never
+ *  laid out, so it is read here rather than in `filterGraph`. */
+export function groupColors(nodes: GraphNode[], groups: ColorGroup[]): Map<string, string> {
+  const parsed = groups
+    .map((g) => ({ q: parseSearch(g.query), color: hexColor(g.color.rgb) }))
+    .filter(({ q }) => Object.values(q).some((terms) => terms.length > 0));
+  const out = new Map<string, string>();
+  for (const n of nodes) {
+    const hit = parsed.find(({ q }) => matches(n, q, null));
+    if (hit) out.set(n.id, hit.color);
+  }
+  return out;
 }
 
 /** Nodes within `depth` links of `center`, following links either way. */

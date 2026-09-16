@@ -30,7 +30,8 @@ export function findWikilinks(text: string): WikiLink[] {
 
 export function displayText(l: WikiLink): string {
   if (l.alias) return l.alias;
-  if (l.block) return `${l.target} › ^${l.block}`;
+  // The id is never the thing on screen; hovering shows the passage instead.
+  if (l.block) return l.target;
   return l.heading ? `${l.target} › ${l.heading}` : l.target;
 }
 

@@ -23,6 +23,11 @@ describe("block links", () => {
     const [b, h] = findWikilinks("[[N#^b1]] [[N#H]]");
     expect([b.block, b.heading]).toEqual(["b1", undefined]);
     expect([h.block, h.heading]).toEqual([undefined, "H"]);
-    expect([displayText(b), linkTarget(b), linkTarget(h)]).toEqual(["N › ^b1", "N#^b1", "N#H"]);
+    expect([displayText(b), linkTarget(b), linkTarget(h)]).toEqual(["N", "N#^b1", "N#H"]);
+  });
+  it("never shows the id, with or without an alias", () => {
+    const [plain, aliased] = findWikilinks("[[N#^ab12cd]] [[N#^ab12cd|the words]]");
+    expect(displayText(plain)).toBe("N");
+    expect(displayText(aliased)).toBe("the words");
   });
 });

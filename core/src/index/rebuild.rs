@@ -19,7 +19,8 @@ fn hash(text: &str) -> String {
 }
 
 // The source line the body starts on, so a link's line maps into `body`.
-fn line_of_body(text: &str, body_offset: usize) -> i64 {
+/// The 1-based file line the body starts on.
+pub fn line_of_body(text: &str, body_offset: usize) -> i64 {
     text[..body_offset].bytes().filter(|b| *b == b'\n').count() as i64 + 1
 }
 
@@ -344,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn rebuild_writes_passages_and_an_edit_replaces_them() {
+    fn rebuild_writes_one_passage_and_an_edit_replaces_it() {
         let (d, v) = vault();
         let mut ix = Index::open_in_memory().unwrap();
         ix.rebuild(&v).unwrap();
@@ -352,23 +353,16 @@ mod tests {
             count(&ix, "SELECT count(*) FROM passages WHERE path='A.md'"),
             1
         );
-        let heading: String = ix
-            .conn()
-            .query_row("SELECT heading FROM passages WHERE path='A.md'", [], |r| {
-                r.get(0)
-            })
-            .unwrap();
-        assert_eq!(heading, "A");
         fs::write(d.path().join("A.md"), "# X\none\n\n# Y\ntwo").unwrap();
         ix.update_file(&v, "A.md").unwrap();
         let rows: Vec<String> = ix
             .conn()
-            .prepare("SELECT heading FROM passages WHERE path='A.md' ORDER BY ordinal")
+            .prepare("SELECT text FROM passages WHERE path='A.md' ORDER BY ordinal")
             .unwrap()
             .query_map([], |r| r.get(0))
             .unwrap()
             .collect::<std::result::Result<_, _>>()
             .unwrap();
-        assert_eq!(rows, vec!["X".to_string(), "Y".to_string()]);
+        assert_eq!(rows, vec!["# X\none\n\n# Y\ntwo".to_string()]);
     }
 }

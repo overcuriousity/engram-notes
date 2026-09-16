@@ -7,9 +7,11 @@ use engram_core::graph::{Graph, SemanticEdge};
 use engram_core::import::logseq::{self as logseq_import, Summary as ImportSummary};
 use engram_core::index::query::{LinkRow, PropertyCount, TagCount, Unresolved};
 use engram_core::index::{Index, RebuildStats};
+use engram_core::linking::{self, Block, Preview};
 use engram_core::memory::{EventKind, related::Related};
 use engram_core::rename::RenamePlan;
 use engram_core::search::SearchResults;
+use engram_core::search::candidates::LinkCandidate;
 use engram_core::templates;
 use engram_core::vault::{FileEntry, Vault};
 use engram_core::watch::{Change, ChangeKind};
@@ -391,6 +393,103 @@ pub fn search(
             now(),
             limit.unwrap_or(50),
         )?)
+    })
+}
+
+#[tauri::command]
+pub fn link_candidates(
+    state: State<AppState>,
+    query: String,
+    limit: Option<usize>,
+) -> CmdResult<Vec<LinkCandidate>> {
+    // One or two characters say nothing by meaning, and this runs a keystroke at
+    // a time behind the embedder's lock; below that the spelling branch answers.
+    let vector = if query.trim().chars().count() < 3 {
+        None
+    } else {
+        let embed = state.embed.lock().unwrap().clone();
+        let mut guard = embed.embedder.lock().unwrap();
+        guard.as_mut().and_then(|m| m.embed_query(&query).ok())
+    };
+    with_open(&state, |o| {
+        Ok(engram_core::search::candidates::link_candidates(
+            &o.index,
+            &query,
+            vector.as_deref(),
+            &o.config.search,
+            &o.config.memory,
+            now(),
+            limit.unwrap_or(20),
+        )?)
+    })
+}
+
+#[tauri::command]
+pub fn blocks(state: State<AppState>, path: String) -> CmdResult<Vec<Block>> {
+    with_open(&state, |o| {
+        let text = o.vault.read(&path)?;
+        let note = engram_core::parse::parse(&text);
+        Ok(linking::blocks(&note.body))
+    })
+}
+
+// Six of Obsidian's characters from the clock and a counter; core rejects a
+// collision, so this only has to be cheap.
+fn fresh_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let mut x = t ^ N.fetch_add(0x9E37_79B9_7F4A_7C15, Ordering::Relaxed) | 1;
+    const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+    (0..6)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            ALPHABET[(x % 36) as usize] as char
+        })
+        .collect()
+}
+
+/// Write the anchor for the block at `first..=last` (body lines) if it has
+/// none, and return its id. The block must still be there.
+#[tauri::command]
+pub fn anchor_block(
+    state: State<AppState>,
+    path: String,
+    first: u32,
+    last: u32,
+) -> CmdResult<String> {
+    with_open(&state, |o| {
+        let text = o.vault.read(&path)?;
+        let note = engram_core::parse::parse(&text);
+        let block = linking::blocks(&note.body)
+            .into_iter()
+            .find(|b| b.first == first && b.last == last)
+            .ok_or_else(|| engram_core::Error::NotFound("the block has moved".into()))?;
+        let body_line = engram_core::index::line_of_body(&text, note.body_offset) as u32;
+        let out = linking::anchor(&text, body_line, &block, &mut fresh_id)?;
+        if out.changed {
+            o.vault.write(&path, &out.text)?;
+            o.index.update_file(&o.vault, &path)?;
+        }
+        Ok(out.id)
+    })
+}
+
+#[tauri::command]
+pub fn link_preview(
+    state: State<AppState>,
+    path: String,
+    fragment: Option<String>,
+) -> CmdResult<Option<Preview>> {
+    with_open(&state, |o| {
+        Ok(o.index
+            .body(&path)?
+            .and_then(|b| linking::preview(&b, fragment.as_deref())))
     })
 }
 
@@ -802,7 +901,6 @@ mod tests {
             path: "A.md".into(),
             title: "A".into(),
             snippet: "<mark>a</mark>".into(),
-            heading: Some("H".into()),
             line: 3,
             similarity: Some(0.8),
             score: 0.5,

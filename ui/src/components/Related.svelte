@@ -41,10 +41,7 @@
   <div class="pane-title sub">Similar</div>
   {#each data.similar as s (s.path)}
     <button class="linkrow" onclick={() => app.openNote(s.path)}>
-      <div class="src">
-        {s.title}
-        {#if s.heading}<span class="dim">— {s.heading}</span>{/if}
-      </div>
+      <div class="src">{s.title}</div>
       <div class="ctx">{s.text}</div>
     </button>
   {/each}
