@@ -68,8 +68,14 @@ pub fn spawn(app: AppHandle, embed: Arc<Embed>, cfg: EmbedConfig, models_dir: st
             s.error = None;
         });
         let loaded = match cfg.model_dir.as_deref() {
-            Some(dir) => FastEmbedder::from_dir(std::path::Path::new(dir)),
-            None => FastEmbedder::download(&models_dir),
+            Some(dir) => {
+                let dir = std::path::Path::new(dir);
+                FastEmbedder::from_dir(dir, &engram_core::embed::fastembed::dir_id(dir))
+            }
+            None => FastEmbedder::from_dir(
+                &models_dir.join("embedder"),
+                engram_core::embed::fastembed::EMBEDDER_ID,
+            ),
         };
         let model: Box<dyn Embedder> = match loaded {
             Ok(m) => Box::new(m),

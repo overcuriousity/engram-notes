@@ -1,17 +1,21 @@
-//! fastembed with `multilingual-e5-small`. Downloaded on first use, or loaded
-//! from a folder for machines with no network.
+//! fastembed over folders of ONNX files: the bundled models, or a folder the
+//! writer points at. Nothing here opens a connection.
 
-use super::{Embedder, normalise};
+use super::{Embedder, Reranker, normalise, sigmoid};
 use crate::{Error, Result};
 use fastembed::{
-    EmbeddingModel, InitOptionsUserDefined, Pooling, QuantizationMode, TextEmbedding,
-    TextInitOptions, TokenizerFiles, UserDefinedEmbeddingModel,
+    InitOptionsUserDefined, Pooling, QuantizationMode, RerankInitOptionsUserDefined, TextEmbedding,
+    TextRerank, TokenizerFiles, UserDefinedEmbeddingModel, UserDefinedRerankingModel,
 };
 use std::path::Path;
 
-/// fastembed ships no quantized e5-small, so this is the full model.
-pub const MODEL_ID: &str = "multilingual-e5-small";
+/// `multilingual-e5-small`, dynamically quantised to int8.
+pub const EMBEDDER_ID: &str = "multilingual-e5-small-int8";
+/// `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`, dynamically quantised to int8.
+pub const RERANKER_ID: &str = "mmarco-mMiniLMv2-L12-H384-v1-int8";
 pub const DIM: usize = 384;
+/// Both models take 512 tokens.
+const MAX_LENGTH: usize = 512;
 
 pub struct FastEmbedder {
     model: TextEmbedding,
@@ -26,42 +30,42 @@ fn read(dir: &Path, name: &str) -> Result<Vec<u8>> {
     std::fs::read(dir.join(name)).map_err(|e| Error::io(dir.join(name), e))
 }
 
-impl FastEmbedder {
-    /// Fetches the model into `cache_dir` if it is not there already.
-    pub fn download(cache_dir: &Path) -> Result<FastEmbedder> {
-        let options = TextInitOptions::new(EmbeddingModel::MultilingualE5Small)
-            .with_cache_dir(cache_dir.to_path_buf())
-            .with_show_download_progress(false);
-        Ok(FastEmbedder {
-            model: TextEmbedding::try_new(options).map_err(embed_error)?,
-            id: MODEL_ID.to_owned(),
-        })
-    }
+/// The four tokenizer files every model folder holds beside `model.onnx`.
+fn tokenizer_files(dir: &Path) -> Result<TokenizerFiles> {
+    Ok(TokenizerFiles {
+        tokenizer_file: read(dir, "tokenizer.json")?,
+        config_file: read(dir, "config.json")?,
+        special_tokens_map_file: read(dir, "special_tokens_map.json")?,
+        tokenizer_config_file: read(dir, "tokenizer_config.json")?,
+    })
+}
 
+/// The id an override folder gets, so the index knows its vectors are not the
+/// bundled model's.
+pub fn dir_id(dir: &Path) -> String {
+    let name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "model".into());
+    format!("dir:{name}")
+}
+
+impl FastEmbedder {
     /// A folder holding `model.onnx`, `tokenizer.json`, `config.json`,
     /// `special_tokens_map.json` and `tokenizer_config.json`.
-    pub fn from_dir(dir: &Path) -> Result<FastEmbedder> {
+    pub fn from_dir(dir: &Path, id: &str) -> Result<FastEmbedder> {
         let model = UserDefinedEmbeddingModel {
             onnx_file: read(dir, "model.onnx")?,
             external_initializers: Default::default(),
-            tokenizer_files: TokenizerFiles {
-                tokenizer_file: read(dir, "tokenizer.json")?,
-                config_file: read(dir, "config.json")?,
-                special_tokens_map_file: read(dir, "special_tokens_map.json")?,
-                tokenizer_config_file: read(dir, "tokenizer_config.json")?,
-            },
+            tokenizer_files: tokenizer_files(dir)?,
             pooling: Some(Pooling::Mean),
             quantization: QuantizationMode::None,
             output_key: None,
         };
-        let name = dir
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "model".into());
         Ok(FastEmbedder {
             model: TextEmbedding::try_new_from_user_defined(model, InitOptionsUserDefined::new())
                 .map_err(embed_error)?,
-            id: format!("dir:{name}"),
+            id: id.to_owned(),
         })
     }
 }
@@ -96,16 +100,69 @@ impl Embedder for FastEmbedder {
     }
 }
 
+pub struct FastReranker {
+    model: TextRerank,
+    id: String,
+}
+
+impl FastReranker {
+    /// The same five files as the embedder's folder.
+    pub fn from_dir(dir: &Path, id: &str) -> Result<FastReranker> {
+        let model = UserDefinedRerankingModel::new(read(dir, "model.onnx")?, tokenizer_files(dir)?);
+        let options = RerankInitOptionsUserDefined::new().with_max_length(MAX_LENGTH);
+        Ok(FastReranker {
+            model: TextRerank::try_new_from_user_defined(model, options).map_err(embed_error)?,
+            id: id.to_owned(),
+        })
+    }
+}
+
+impl Reranker for FastReranker {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    // fastembed returns the pairs sorted by score; the trait promises document order.
+    fn score(&mut self, query: &str, documents: &[String]) -> Result<Vec<f32>> {
+        if documents.is_empty() {
+            return Ok(vec![]);
+        }
+        let docs: Vec<&str> = documents.iter().map(String::as_str).collect();
+        let ranked = self
+            .model
+            .rerank(query, docs.as_slice(), false, None)
+            .map_err(embed_error)?;
+        let mut out = vec![0.0f32; documents.len()];
+        for r in ranked {
+            let slot = out
+                .get_mut(r.index)
+                .ok_or_else(|| Error::Embed(format!("rerank index {} out of range", r.index)))?;
+            *slot = sigmoid(r.score);
+        }
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // Both need the folders `scripts/fetch-models.sh` fills.
+    fn models() -> std::path::PathBuf {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../src-tauri/models");
+        assert!(
+            dir.join("embedder/model.onnx").exists(),
+            "run scripts/fetch-models.sh first"
+        );
+        dir
+    }
+
     #[test]
-    #[ignore = "downloads the model"]
-    fn the_real_model_embeds_and_ranks() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut e = FastEmbedder::download(dir.path()).unwrap();
+    #[ignore = "needs src-tauri/models from scripts/fetch-models.sh"]
+    fn the_bundled_embedder_embeds_and_ranks() {
+        let mut e = FastEmbedder::from_dir(&models().join("embedder"), EMBEDDER_ID).unwrap();
         assert_eq!(e.dim(), DIM);
+        assert_eq!(e.id(), EMBEDDER_ID);
         let docs = e
             .embed_documents(&["rust ownership".into(), "kettle and beans".into()])
             .unwrap();
@@ -113,5 +170,25 @@ mod tests {
         let q = e.embed_query("who owns the memory in rust").unwrap();
         let dot = |a: &[f32], b: &[f32]| a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
         assert!(dot(&q, &docs[0]) > dot(&q, &docs[1]));
+    }
+
+    #[test]
+    #[ignore = "needs src-tauri/models from scripts/fetch-models.sh"]
+    fn the_bundled_reranker_scores_in_document_order() {
+        let mut r = FastReranker::from_dir(&models().join("reranker"), RERANKER_ID).unwrap();
+        let s = r
+            .score(
+                "who owns the memory in rust",
+                &["kettle and beans".into(), "rust ownership rules".into()],
+            )
+            .unwrap();
+        assert_eq!(s.len(), 2);
+        assert!(s[1] > s[0], "{s:?}");
+        assert!(s.iter().all(|x| (0.0..=1.0).contains(x)));
+    }
+
+    #[test]
+    fn an_override_folder_is_named_after_itself() {
+        assert_eq!(dir_id(Path::new("/x/my-model")), "dir:my-model");
     }
 }
