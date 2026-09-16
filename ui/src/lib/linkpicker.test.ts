@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockTrigger, firstLine, headingFragment, linkText, stemOf } from "./linkpicker";
+import { aliasText, blockTrigger, firstLine, headingFragment, linkText, stemOf } from "./linkpicker";
 import type { Block } from "./api";
 
 const para: Block = { kind: "paragraph", first: 3, last: 4, text: "para one\nstill one", heading: null };
@@ -21,6 +21,16 @@ describe("linkText", () => {
     // Nothing left to point at: the note itself is what the link means.
     expect(linkText("Note.md", h("^^^"), null, null)).toBe("[[Note]]");
     expect(linkText("Note.md", h("|"), null, "w")).toBe("[[Note|w]]");
+  });
+  it("drops what a link cannot spell from the alias", () => {
+    // A bracket in the selection would end the link, and the whole thing would
+    // parse as text: no backlink, under an anchor already written to the target.
+    expect(linkText("Note.md", para, "ab12cd", "see figure [2] below")).toBe("[[Note#^ab12cd|see figure 2 below]]");
+    expect(linkText("Note.md", para, "ab12cd", "two\nlines")).toBe("[[Note#^ab12cd|two lines]]");
+    // `|` and `#` an alias may hold; core's alias group reads to the closing brackets.
+    expect(aliasText("Pros | Cons #tag")).toBe("Pros | Cons #tag");
+    // An alias of nothing but brackets is no alias.
+    expect(linkText("Note.md", para, "ab12cd", "[]")).toBe("[[Note#^ab12cd]]");
   });
   it("stems a path", () => {
     expect(stemOf("x/y/Z.md")).toBe("Z");
