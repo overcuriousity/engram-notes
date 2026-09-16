@@ -332,11 +332,16 @@ class AppStateStore {
     return L.panes(this.layout).some((p) => p.tabs.some((t) => t.path === path));
   }
 
-  // A buffer no tab shows any more is saved, then dropped.
+  // A buffer no tab shows any more is saved, then dropped. A save that did not
+  // land keeps it: the tab is already closed, so dropping it would drop the only
+  // copy of the edit, and opening the note again finds this buffer waiting.
   private async release(path: string) {
     const d = this.docs[path];
     if (!d || this.shown(path)) return;
-    await this.save(d);
+    if (!(await this.flush(path))) {
+      this.say(`${path} could not be saved. Its unsaved text is kept until the note is opened again.`);
+      return;
+    }
     if (!this.shown(path)) delete this.docs[path];
   }
 
