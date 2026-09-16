@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Graph } from "./api";
-import { DEFAULTS, easeStep, filterGraph, fitView, groupColor, hexColor, hitRadius, labelAlpha, parseSearch, radius, readColorGroups, readSettings, rgbInt, searchWords, type GraphSettings, type ViewGraph } from "./graph";
+import { DEFAULTS, easeStep, filterGraph, fitView, defaultSettings, groupColors, hexColor, hitRadius, labelAlpha, parseSearch, radius, readColorGroups, readSettings, rgbInt, searchWords, type GraphSettings, type ViewGraph } from "./graph";
 
 const g: Graph = {
   nodes: [
@@ -19,7 +19,7 @@ const g: Graph = {
   ],
 };
 const ids = (v: ViewGraph) => v.nodes.map((n) => n.id);
-const s = (o: Partial<GraphSettings> = {}): GraphSettings => ({ ...DEFAULTS, ...o });
+const s = (o: Partial<GraphSettings> = {}): GraphSettings => ({ ...defaultSettings(), ...o });
 
 describe("graph filters", () => {
   it("hides attachments by default; unresolved and orphans on request", () => {
@@ -74,7 +74,7 @@ describe("graph filters", () => {
   });
 
   it("draws small nodes that grow slowly with links", () => {
-    const n = (inbound: number) => ({ id: "a", title: "a", kind: "note" as const, tags: [], inbound, color: null });
+    const n = (inbound: number) => ({ id: "a", title: "a", kind: "note" as const, tags: [], inbound });
     expect(radius(n(0), DEFAULTS)).toBeCloseTo(2.5);
     expect(radius(n(4), DEFAULTS)).toBeCloseTo(5.5);
     // A hub is bigger, not enormous.
@@ -143,12 +143,25 @@ describe("colour groups", () => {
 
   it("colours a node by the first group that matches it", () => {
     const groups = [{ query: "tag:#proj", color: red }, { query: "file:B", color: blue }, { query: "", color: blue }];
+    const c = groupColors(g.nodes, groups);
+    expect(c.get("A.md")).toBe("#ff0000");
+    expect(c.get("B.md")).toBe("#ff0000");
+    expect(c.has("C.md")).toBe(false);
+    expect(groupColors(g.nodes, [{ query: "path:c", color: blue }]).get(g.nodes[2].id)).toBe("#0000ff");
+  });
+
+  it("keeps colour out of the drawn graph, so a group edit is not a new layout", () => {
+    const groups = [{ query: "tag:#proj", color: red }];
     const v = filterGraph(g, s({ colorGroups: groups }), null);
-    const color = (id: string) => v.nodes.find((n) => n.id === id)!.color;
-    expect(color("A.md")).toBe("#ff0000");
-    expect(color("B.md")).toBe("#ff0000");
-    expect(color("C.md")).toBeNull();
-    expect(groupColor(g.nodes[2], [{ query: "path:c", color: blue }])).toBe("#0000ff");
+    const plain = filterGraph(g, s(), null);
+    expect(v).toEqual(plain);
+  });
+
+  it("gives each settings object its own colorGroups", () => {
+    const a = defaultSettings();
+    a.colorGroups.push({ query: "x", color: red });
+    expect(defaultSettings().colorGroups).toEqual([]);
+    expect(DEFAULTS.colorGroups).toEqual([]);
   });
 
   it("reads Obsidian's colorGroups and drops what is malformed", () => {

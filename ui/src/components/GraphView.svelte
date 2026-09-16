@@ -5,7 +5,8 @@
   import X from "@lucide/svelte/icons/x";
   import { app } from "../lib/state.svelte";
   import { createNote, errorMessage, getGraphConfig, graph as loadGraph, search, semanticEdges, setGraphConfig, type Graph, type SemanticEdge } from "../lib/api";
-  import { DEFAULTS, GROUP_COLORS, easeStep, filterGraph, fitView, forces, hexColor, hitRadius, labelAlpha, radius, readSettings, rgbInt, searchWords, type GraphSettings, type ViewGraph, type ViewNode } from "../lib/graph";
+  import { GROUP_COLORS, defaultSettings, easeStep, filterGraph, fitView, forces, groupColors, hexColor, hitRadius, labelAlpha, radius, readSettings, rgbInt, searchWords, type GraphSettings, type ViewGraph, type ViewNode } from "../lib/graph";
+  import { resolvedTheme } from "../lib/snippets";
   import { weightBucket, type DrawEdge } from "../lib/semantic";
 
   let { local }: { local: boolean } = $props();
@@ -16,7 +17,7 @@
 
   let canvas = $state<HTMLCanvasElement>();
   let data = $state.raw<Graph>({ nodes: [], edges: [] });
-  let settings = $state<GraphSettings>({ ...DEFAULTS });
+  let settings = $state<GraphSettings>(defaultSettings());
   let content = $state.raw<Set<string> | null>(null);
   let semantic = $state.raw<SemanticEdge[]>([]);
   let panel = $state(false);
@@ -42,12 +43,18 @@
   // While the first layout settles the view keeps it framed; a gesture takes over.
   let fitPending = false;
   // Theme colours, read from CSS once per theme change rather than once per frame.
+  // The read happens in the paint that follows, so it cannot land before the
+  // theme the app is switching to is on the document.
   let palette: Record<string, string> = {};
+  let paletteStale = true;
+  let prefersDark = $state(matchMedia("(prefers-color-scheme: dark)").matches);
 
   const say = (e: unknown) => app.say(errorMessage(e));
   const center = $derived(local ? app.lastNote : null);
   const semanticOn = $derived(local ? settings.showSemanticLocal : settings.showSemantic);
   const shown = $derived<ViewGraph>(local && !center ? { nodes: [], edges: [] } : filterGraph(data, settings, content, center, semantic));
+  // Colour is painted, not laid out: editing a group must not rebuild the simulation.
+  const colors = $derived(groupColors(data.nodes, settings.colorGroups));
 
   onMount(() => {
     const c = canvas!;
@@ -135,8 +142,22 @@
   });
 
   $effect(() => {
-    void app.config?.theme;
-    readPalette();
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => (prefersDark = e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  });
+
+  // The theme as it reaches the screen: under "system", the default, the config
+  // never changes and only the OS preference says the colours moved.
+  $effect(() => {
+    void resolvedTheme(app.config?.theme ?? "system", prefersDark);
+    paletteStale = true;
+    draw();
+  });
+
+  $effect(() => {
+    void colors;
     draw();
   });
 
@@ -205,7 +226,7 @@
     const dpr = devicePixelRatio || 1;
     c.width = Math.round(box.width * dpr);
     c.height = Math.round(box.height * dpr);
-    readPalette();
+    paletteStale = true;
     draw();
   }
 
@@ -248,6 +269,10 @@
     const c = canvas;
     if (!c) return;
     const ctx = c.getContext("2d")!;
+    if (paletteStale) {
+      readPalette();
+      paletteStale = false;
+    }
     const color = (name: string) => palette[name] ?? "";
     const dpr = devicePixelRatio || 1;
     const { x: ox, y: oy, k } = view;
@@ -322,7 +347,7 @@
     const groups = new Map<string, Node[]>();
     for (const n of nodes) {
       const accent = n === hover || near.has(n);
-      const paint = accent ? "accent" : n.data.kind === "unresolved" ? "unresolved" : (n.data.color ?? n.data.kind);
+      const paint = accent ? "accent" : n.data.kind === "unresolved" ? "unresolved" : (colors.get(n.data.id) ?? n.data.kind);
       const key = `${paint}|${accent || !hover ? 1 : dim}`;
       const g = groups.get(key);
       if (g) g.push(n);

@@ -47,6 +47,11 @@ export const DEFAULTS: GraphSettings = {
   localDepth: 1,
 };
 
+/** A settings object of its own: `DEFAULTS` is module-level and `colorGroups` is edited in place. */
+export function defaultSettings(): GraphSettings {
+  return { ...DEFAULTS, colorGroups: [] };
+}
+
 export function readSettings(raw: Record<string, unknown>): GraphSettings {
   const out: Record<string, unknown> = { ...DEFAULTS };
   for (const [k, v] of Object.entries(DEFAULTS)) if (!Array.isArray(v) && typeof raw[k] === typeof v) out[k] = raw[k];
@@ -99,7 +104,7 @@ export function searchWords(q: string): string {
   return [...q.matchAll(TERM)].filter((m) => !["tag:", "path:", "file:"].includes(m[1] ?? "")).map((m) => m[0]).join(" ");
 }
 
-export interface ViewNode { id: string; title: string; kind: GraphNode["kind"] | "tag"; tags: string[]; inbound: number; color: string | null }
+export interface ViewNode { id: string; title: string; kind: GraphNode["kind"] | "tag"; tags: string[]; inbound: number }
 export interface ViewGraph { nodes: ViewNode[]; edges: DrawEdge[] }
 
 function matches(n: GraphNode, s: Search, content: Set<string> | null): boolean {
@@ -113,14 +118,19 @@ function matches(n: GraphNode, s: Search, content: Set<string> | null): boolean 
   return s.words.every((w) => title.includes(w) || path.includes(w));
 }
 
-/** The first group whose query matches, as Obsidian's higher group wins. Words match the title and path only. */
-export function groupColor(n: GraphNode, groups: ColorGroup[]): string | null {
-  for (const g of groups) {
-    const q = parseSearch(g.query);
-    if (Object.values(q).every((terms) => terms.length === 0)) continue;
-    if (matches(n, q, null)) return hexColor(g.color.rgb);
+/** Each node's colour: the first group whose query matches, as Obsidian's higher
+ *  group wins. Words match the title and path only. Colour is painted, never
+ *  laid out, so it is read here rather than in `filterGraph`. */
+export function groupColors(nodes: GraphNode[], groups: ColorGroup[]): Map<string, string> {
+  const parsed = groups
+    .map((g) => ({ q: parseSearch(g.query), color: hexColor(g.color.rgb) }))
+    .filter(({ q }) => Object.values(q).some((terms) => terms.length > 0));
+  const out = new Map<string, string>();
+  for (const n of nodes) {
+    const hit = parsed.find(({ q }) => matches(n, q, null));
+    if (hit) out.set(n.id, hit.color);
   }
-  return null;
+  return out;
 }
 
 /** Nodes within `depth` links of `center`, following links either way. */
@@ -161,7 +171,7 @@ export function filterGraph(
   let nodes: ViewNode[] = g.nodes
     .filter((n) => (n.kind !== "attachment" || s.showAttachments) && (n.kind !== "unresolved" || !s.hideUnresolved))
     .filter((n) => !searching || matches(n, search, content))
-    .map((n) => ({ ...n, inbound: 0, color: groupColor(n, s.colorGroups) }));
+    .map((n) => ({ ...n, inbound: 0 }));
   const kept = new Set(nodes.map((n) => n.id));
   const drawn = mergeEdges(g.edges, semantic, center ? s.showSemanticLocal : s.showSemantic);
   let edges = drawn.filter((e) => kept.has(e.source) && kept.has(e.target));
@@ -173,7 +183,7 @@ export function filterGraph(
         edges.push({ source: n.id, target: `#${t}`, kind: "link", weight: 1 });
       }
     }
-    for (const t of [...tags].sort()) nodes.push({ id: `#${t}`, title: `#${t}`, kind: "tag", tags: [], inbound: 0, color: null });
+    for (const t of [...tags].sort()) nodes.push({ id: `#${t}`, title: `#${t}`, kind: "tag", tags: [], inbound: 0 });
   }
   if (center) {
     const near = neighbourhood(edges, center, s.localDepth);
