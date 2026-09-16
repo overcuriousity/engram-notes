@@ -113,7 +113,8 @@ numbers, and `rerank_floor`'s default is a starting point that measurement
 sets, the way the direction spec says of `rerank_n`.
 
 **Config.** `SearchConfig` gains `rerank_n: usize` (20), `rerank_floor:
-f32` and `rerank_budget_ms: u64` (500). `EmbedConfig` gains `reranker_dir:
+f32` (0.1: a MiniLM cross-encoder's sigmoid sits near 0 or 1, so the floor
+only has to sort the two bands) and `rerank_budget_ms: u64` (500). `EmbedConfig` gains `reranker_dir:
 Option<String>` beside `model_dir`.
 
 ## The shell
