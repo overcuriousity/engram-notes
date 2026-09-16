@@ -187,6 +187,31 @@ mod tests {
         assert!(s.iter().all(|x| (0.0..=1.0).contains(x)));
     }
 
+    // The budget's default was set from this number; run it on a new machine
+    // with `-- --ignored --nocapture` before changing the default.
+    #[test]
+    #[ignore = "needs src-tauri/models from scripts/fetch-models.sh"]
+    fn one_search_of_pairs_is_timed() {
+        let mut r = FastReranker::from_dir(&models().join("reranker"), RERANKER_ID).unwrap();
+        let passage =
+            "the vault keeps a folder of markdown notes and an index that can be rebuilt "
+                .repeat(16);
+        r.score("warm up", &vec![passage.clone(); 4]).unwrap();
+        for (n, chars) in [
+            (20, 1200),
+            (20, 600),
+            (20, 300),
+            (10, 1200),
+            (10, 600),
+            (10, 300),
+        ] {
+            let docs = vec![passage[..chars].to_string(); n];
+            let start = std::time::Instant::now();
+            r.score("a query about the notes", &docs).unwrap();
+            eprintln!("{n} pairs of {chars} chars: {:?}", start.elapsed());
+        }
+    }
+
     #[test]
     fn an_override_folder_is_named_after_itself() {
         assert_eq!(dir_id(Path::new("/x/my-model")), "dir:my-model");
