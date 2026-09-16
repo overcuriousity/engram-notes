@@ -14,6 +14,91 @@ pub trait Embedder: Send {
     fn embed_query(&mut self, text: &str) -> Result<Vec<f32>>;
 }
 
+/// The cross-encoder seam: a query against a few documents, one score each.
+pub trait Reranker: Send {
+    /// Identifies the model; the status bar shows it.
+    fn id(&self) -> String;
+    /// One score per document, higher is more relevant, in `documents` order.
+    fn score(&mut self, query: &str, documents: &[String]) -> Result<Vec<f32>>;
+}
+
+/// Scores the share of the query's words the document contains. No model,
+/// same answer every run, and a test can arrange the order it wants.
+pub struct FakeReranker;
+
+fn words(text: &str) -> Vec<String> {
+    text.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+impl Reranker for FakeReranker {
+    fn id(&self) -> String {
+        "fake-reranker".into()
+    }
+
+    fn score(&mut self, query: &str, documents: &[String]) -> Result<Vec<f32>> {
+        let q = words(query);
+        Ok(documents
+            .iter()
+            .map(|d| {
+                if q.is_empty() {
+                    return 0.0;
+                }
+                let have: std::collections::HashSet<String> = words(d).into_iter().collect();
+                q.iter().filter(|w| have.contains(*w)).count() as f32 / q.len() as f32
+            })
+            .collect())
+    }
+}
+
+/// A reranker that remembers how long its last run took and whether it
+/// failed, so the shell can hold it to a budget without core knowing one.
+pub struct TimedReranker {
+    inner: Box<dyn Reranker>,
+    last: Option<std::time::Duration>,
+    last_error: Option<String>,
+}
+
+impl TimedReranker {
+    pub fn new(inner: Box<dyn Reranker>) -> TimedReranker {
+        TimedReranker {
+            inner,
+            last: None,
+            last_error: None,
+        }
+    }
+
+    pub fn last(&self) -> Option<std::time::Duration> {
+        self.last
+    }
+
+    pub fn last_error(&self) -> Option<String> {
+        self.last_error.clone()
+    }
+}
+
+impl Reranker for TimedReranker {
+    fn id(&self) -> String {
+        self.inner.id()
+    }
+
+    fn score(&mut self, query: &str, documents: &[String]) -> Result<Vec<f32>> {
+        let start = std::time::Instant::now();
+        let out = self.inner.score(query, documents);
+        self.last = Some(start.elapsed());
+        self.last_error = out.as_ref().err().map(|e| e.to_string());
+        out
+    }
+}
+
+/// A cross-encoder's logit as a probability, so the divider reads it like a cosine.
+pub fn sigmoid(x: f32) -> f32 {
+    1.0 / (1.0 + (-x).exp())
+}
+
 /// Hashes words into a vector. No model, no network, same answer every run.
 pub struct FakeEmbedder {
     dim: usize,
@@ -119,5 +204,59 @@ mod tests {
     fn empty_text_is_a_zero_vector_rather_than_a_nan() {
         let mut e = FakeEmbedder::new(8);
         assert_eq!(e.embed_query("").unwrap(), vec![0.0; 8]);
+    }
+    #[test]
+    fn the_fake_reranker_scores_the_share_of_query_words_present() {
+        let mut r = FakeReranker;
+        assert_eq!(r.id(), "fake-reranker");
+        let s = r
+            .score(
+                "rust ownership",
+                &[
+                    "rust ownership rules".to_string(),
+                    "ownership alone".to_string(),
+                    "coffee".to_string(),
+                ],
+            )
+            .unwrap();
+        assert_eq!(s, vec![1.0, 0.5, 0.0]);
+        assert_eq!(r.score("", &["a".to_string()]).unwrap(), vec![0.0]);
+    }
+
+    #[test]
+    fn the_timed_wrapper_records_the_last_run() {
+        let mut t = TimedReranker::new(Box::new(FakeReranker));
+        assert!(t.last().is_none());
+        assert_eq!(t.id(), "fake-reranker");
+        let s = t.score("a", &["a b".to_string()]).unwrap();
+        assert_eq!(s, vec![1.0]);
+        assert!(t.last().is_some());
+        assert!(t.last_error().is_none());
+    }
+
+    #[test]
+    fn the_timed_wrapper_keeps_the_error_of_a_failing_reranker() {
+        struct Broken;
+        impl Reranker for Broken {
+            fn id(&self) -> String {
+                "broken".into()
+            }
+            fn score(&mut self, _: &str, _: &[String]) -> Result<Vec<f32>> {
+                Err(crate::Error::Embed("no".into()))
+            }
+        }
+        let mut t = TimedReranker::new(Box::new(Broken));
+        assert!(t.score("a", &["b".to_string()]).is_err());
+        assert_eq!(
+            t.last_error().as_deref(),
+            Some(crate::Error::Embed("no".into()).to_string().as_str())
+        );
+    }
+
+    #[test]
+    fn sigmoid_maps_logits_into_the_unit_interval() {
+        assert!((sigmoid(0.0) - 0.5).abs() < 1e-6);
+        assert!(sigmoid(10.0) > 0.99);
+        assert!(sigmoid(-10.0) < 0.01);
     }
 }
