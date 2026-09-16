@@ -95,9 +95,15 @@ class AppStateStore {
     );
   }
 
-  /** Obsidian's "open another vault", in this window: unsaved notes land on disk first. */
+  /** Obsidian's "open another vault", in this window: unsaved notes land on disk
+   *  first. A save that did not land stops the switch, because opening drops
+   *  every buffer and would take the edit with it. */
   async switchVault(root: string) {
-    for (const d of Object.values(this.docs)) await this.save(d);
+    for (const path of Object.keys(this.docs)) {
+      if (await this.flush(path)) continue;
+      this.say(`${path} could not be saved, so the vault was not switched.`);
+      return;
+    }
     await this.open(root);
   }
 
