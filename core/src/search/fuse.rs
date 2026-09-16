@@ -60,23 +60,30 @@ pub fn cliff(scores: &[f32], factor: f32, min_share: f32) -> Option<usize> {
 
 /// Flag every hit from the fall on, leaving the list in its order.
 ///
-/// The gaps are read over the similarities sorted, then carried back as "after
-/// the last hit that still reaches the cut", so what is marked is always a
-/// tail. A fused list is not in score order -- a hit both branches found sits
-/// above one only the dense branch ranked higher -- and reading it position by
-/// position would cut the good hits below that one away.
+/// Reads the rerank score where reranking ran and the cosine otherwise, each
+/// against its own floor. The gaps are read over the scores sorted, then
+/// carried back as "after the last hit that still reaches the cut", so what
+/// is marked is always a tail. A fused list is not in score order -- a hit
+/// both branches found sits above one only the dense branch ranked higher --
+/// and reading it position by position would cut the good hits below that
+/// one away.
 pub fn mark_past_divider(hits: &mut [Hit], cfg: &SearchConfig) {
-    let mut sorted: Vec<f32> = hits.iter().filter_map(|h| h.similarity).collect();
+    let reranked = hits.iter().any(|h| h.rerank.is_some());
+    let (read, floor): (fn(&Hit) -> Option<f32>, f32) = match reranked {
+        true => (|h| h.rerank, cfg.rerank_floor),
+        false => (|h| h.similarity, cfg.similarity_floor),
+    };
+    let mut sorted: Vec<f32> = hits.iter().filter_map(read).collect();
     if sorted.is_empty() {
         return;
     }
     sorted.sort_by(|a, b| b.total_cmp(a));
     // The later of two readings, so whichever leaves more hits standing wins:
-    // the cliff finds a fall within the list, the floor knows that a cosine can
+    // the cliff finds a fall within the list, the floor knows that a score can
     // be the best one here and still mean nothing.
     let by_cliff = cliff(&sorted, cfg.cliff_factor, cfg.cliff_min_share)
-        .map(|above| tail_from(hits, sorted[above - 1]));
-    let by_floor = tail_from(hits, cfg.similarity_floor);
+        .map(|above| tail_from(hits, read, sorted[above - 1]));
+    let by_floor = tail_from(hits, read, floor);
     let from = by_cliff.unwrap_or(0).max(by_floor);
     for h in hits.iter_mut().skip(from) {
         h.past_divider = true;
@@ -85,9 +92,9 @@ pub fn mark_past_divider(hits: &mut [Hit], cfg: &SearchConfig) {
 
 // The place after the last hit that still reaches `cut`, so what is marked is
 // always a tail.
-fn tail_from(hits: &[Hit], cut: f32) -> usize {
+fn tail_from(hits: &[Hit], read: fn(&Hit) -> Option<f32>, cut: f32) -> usize {
     hits.iter()
-        .rposition(|h| h.similarity.is_some_and(|s| s >= cut))
+        .rposition(|h| read(h).is_some_and(|s| s >= cut))
         .map_or(0, |i| i + 1)
 }
 
@@ -104,6 +111,7 @@ mod tests {
             snippet: String::new(),
             line: 1,
             similarity,
+            rerank: None,
             score: 0.0,
             past_divider: false,
             primed: false,
@@ -219,5 +227,19 @@ mod tests {
         ];
         mark_past_divider(&mut hits, &SearchConfig::default());
         assert!(hits.iter().all(|h| h.past_divider));
+    }
+    #[test]
+    fn the_divider_reads_rerank_scores_when_any_hit_has_one() {
+        let mut hits = vec![
+            hit("a", Some(0.9)),
+            hit("b", Some(0.9)),
+            hit("c", Some(0.9)),
+        ];
+        hits[0].rerank = Some(0.95);
+        hits[1].rerank = Some(0.90);
+        hits[2].rerank = Some(0.02);
+        mark_past_divider(&mut hits, &SearchConfig::default());
+        assert!(!hits[0].past_divider && !hits[1].past_divider);
+        assert!(hits[2].past_divider, "0.02 is under rerank_floor 0.1");
     }
 }

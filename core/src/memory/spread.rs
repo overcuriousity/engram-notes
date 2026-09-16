@@ -54,6 +54,7 @@ mod tests {
             snippet: String::new(),
             line: 1,
             similarity: None,
+            rerank: None,
             score: 0.0,
             past_divider: false,
             primed: false,

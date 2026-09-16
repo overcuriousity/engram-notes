@@ -75,7 +75,7 @@ pub fn link_candidates(
     // half: the vector scan runs over every note, once per keystroke.
     if !q.is_empty() && out.len() < limit {
         let seen: HashSet<String> = out.iter().map(|c| c.path.clone()).collect();
-        let found = super::hybrid_hits(index, query, query_vec, cfg, mem, at, limit)?;
+        let found = super::hybrid_hits(index, query, query_vec, None, cfg, mem, at, limit)?;
         out.extend(
             found
                 .into_iter()
