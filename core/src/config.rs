@@ -72,6 +72,14 @@ pub struct SearchConfig {
     /// this is what tells a neighbour from one. Measured for
     /// `multilingual-e5-small`; a different model needs a different number.
     pub similarity_floor: f32,
+    /// How many fused hits the cross-encoder rescores. Its cost is the
+    /// dominant one in a search, so this is what the budget trades against.
+    pub rerank_n: usize,
+    /// Below this a rerank score is a stranger. A MiniLM cross-encoder's
+    /// sigmoid sits near 0 or 1, so this only has to sort the two bands.
+    pub rerank_floor: f32,
+    /// A rerank run longer than this switches reranking off for the session.
+    pub rerank_budget_ms: u64,
 }
 
 impl Default for SearchConfig {
@@ -82,6 +90,9 @@ impl Default for SearchConfig {
             cliff_factor: crate::search::fuse::CLIFF_FACTOR,
             cliff_min_share: crate::search::fuse::CLIFF_MIN_SHARE,
             similarity_floor: 0.83,
+            rerank_n: 20,
+            rerank_floor: 0.1,
+            rerank_budget_ms: 500,
         }
     }
 }
@@ -122,8 +133,10 @@ impl Default for MemoryConfig {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct EmbedConfig {
-    /// A folder with the ONNX file and tokenizer, for machines with no network.
+    /// A folder with the ONNX file and tokenizer, replacing the bundled embedder.
     pub model_dir: Option<String>,
+    /// The same for the reranker.
+    pub reranker_dir: Option<String>,
     pub batch: usize,
 }
 
@@ -131,6 +144,7 @@ impl Default for EmbedConfig {
     fn default() -> Self {
         EmbedConfig {
             model_dir: None,
+            reranker_dir: None,
             batch: 32,
         }
     }
@@ -358,6 +372,9 @@ mod tests {
         assert_eq!(cfg.search.rrf_k, 60.0);
         assert_eq!(cfg.search.cliff_factor, 3.0);
         assert_eq!(cfg.search.similarity_floor, 0.83);
+        assert_eq!(cfg.search.rerank_n, 20);
+        assert_eq!(cfg.search.rerank_floor, 0.1);
+        assert_eq!(cfg.search.rerank_budget_ms, 500);
         assert!(cfg.memory.enabled);
         assert_eq!(cfg.memory.activation_half_life_days, 30.0);
         assert_eq!(cfg.memory.assoc_half_life_days, 90.0);
@@ -366,6 +383,7 @@ mod tests {
         assert_eq!(cfg.memory.spread_max, 3);
         assert_eq!(cfg.embed.batch, 32);
         assert_eq!(cfg.embed.model_dir, None);
+        assert_eq!(cfg.embed.reranker_dir, None);
     }
 
     #[test]
