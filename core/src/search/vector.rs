@@ -115,6 +115,18 @@ impl Index {
             .map(|b| from_blob(&b)))
     }
 
+    /// The note's one passage, for a caller that has the path and not the hit.
+    pub fn passage_text(&self, path: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT text FROM passages WHERE path=?1 ORDER BY ordinal LIMIT 1",
+                [path],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
     /// Every passage scored against `query`, best `limit` first.
     pub fn search_vectors(&self, query: &[f32], limit: usize) -> Result<Vec<VecHit>> {
         let sql = format!(
@@ -280,5 +292,17 @@ mod tests {
                 .iter()
                 .all(|h| h.path != "Coffee.md")
         );
+    }
+    #[test]
+    fn passage_text_is_the_note_body_the_embedder_saw() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join("A.md"), "---\nk: v\n---\n# A\nbody words").unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        let text = ix.passage_text("A.md").unwrap().unwrap();
+        assert!(text.contains("body words"), "{text}");
+        assert!(!text.contains("k: v"));
+        assert_eq!(ix.passage_text("missing.md").unwrap(), None);
     }
 }
