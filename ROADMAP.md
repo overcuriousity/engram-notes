@@ -122,16 +122,23 @@ In review; what remains is smoke lines 69–75 in the real window
   `[[Note#^id|words]]`, the anchor written only then, a heading target
   written without one; an existing id reused.
 - 🔶 Hovering a link shows the target passage; the id is never on screen.
-- ⬜ The reranker: ships with 0.6 and the bundled models.
+- 🔶 The reranker: ships with 0.6 and the bundled models.
 
-## 0.6 — Out of the box ⬜
+## 0.6 — Out of the box 🔶
 
 The embedder and a cross-encoder reranker ship **inside the release
-artifact**: no download on first run, no model directory, no network. A page
-in the repository states exactly what reaches the network, and it says
-"nothing" for the default build. Reranking runs for deliberate search and the
-passage picker, within a 500 ms budget, and degrades to fusion order rather
-than to waiting.
+artifact**: no download on first run, no network, and a model folder only
+for whoever wants a different model. Reranking runs for deliberate search
+and the passage picker, within a 500 ms budget, and degrades to fusion order
+rather than to waiting. In review; what remains is smoke lines 76–81 in the
+real window (`docs/superpowers/specs/2026-09-16-out-of-the-box-design.md`).
+
+- 🔶 `multilingual-e5-small` and `mmarco-mMiniLMv2-L12-H384-v1`, int8, as
+  Tauri resources; `scripts/fetch-models.sh` pins them by sha256.
+- 🔶 The `Reranker` seam with its fake; the top `rerank_n` fused hits
+  rescored over their leads, the divider on that score.
+- 🔶 Over budget on load or on a query halves the batch; under five pairs
+  reranking is off for the session and the status bar names the time.
 
 ## 0.7 — Recall while writing, and the event log ⬜
 

@@ -126,5 +126,24 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
 74. Rest the pointer on a passage link in live preview and in reading mode:
     after a moment a popover shows the note's title, the heading path and
     the passage; the `^id` appears nowhere. Moving off hides it.
-75. With the model off (no model folder), `[[` completion still lists notes
-    by spelling and full-text.
+75. Point *Embedding model folder* at a folder holding the fp32 model: the
+    status shows `dir:<name>`, every passage re-embeds, and search still
+    answers meanwhile by full text. Point it at an empty folder: the status
+    shows the error, and `[[` completion still lists notes by spelling.
+76. In a network namespace with no route out (`unshare -rn`), run the
+    AppImage and open a vault: the status bar goes `loading model` to
+    `ready` and passages embed; no `models` folder appears under the data
+    directory.
+77. Unpack the slim tarball and run `bin/engram-notes`: it finds
+    `lib/engram-notes/models` beside it and reaches `ready`.
+78. Ctrl+K, a query that paraphrases a note: the note comes first. A query
+    with nothing in the vault shows the divider with nothing above it.
+79. Set `search.rerank_budget_ms` to `1` in `app.json` and search: results
+    arrive, and the status bar reads `reranking off: … s on this machine`.
+    Set it to a value the machine just misses at 20 pairs: `embed_status`
+    reports a smaller `rerank_n` and reranking stays on.
+80. Ctrl+Shift+K with a paraphrasing selection: the picker's first step
+    lists the paraphrased note first.
+81. Two notes with nothing in common still sit under the divider: the 0.83
+    similarity floor holds for the int8 embedder, or the number that does is
+    recorded in `docs/memory.md`.
