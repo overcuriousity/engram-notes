@@ -30,14 +30,17 @@ export interface TagCount { tag: string; count: number }
 export interface PropertyCount { key: string; count: number }
 export interface Hit {
   path: string; title: string; snippet: string; line: number;
-  similarity: number | null; score: number; past_divider: boolean; primed: boolean;
+  similarity: number | null; rerank: number | null; score: number; past_divider: boolean; primed: boolean;
 }
 export interface Associated { path: string; title: string; via: string; cue: string | null; strength: number }
 export interface SearchResults { hits: Hit[]; associated: Associated[] }
 export interface SimilarNote { path: string; title: string; text: string; similarity: number }
 export interface Related { associated: Associated[]; similar: SimilarNote[]; suggested: SimilarNote[] }
 export interface SemanticEdge { source: string; target: string; weight: number; kind: "assoc" | "similar" }
-export interface EmbedStatus { model: string | null; state: "off" | "loading" | "ready" | "error"; pending: number; error: string | null }
+export interface EmbedStatus {
+  model: string | null; state: "off" | "loading" | "ready" | "error"; pending: number; error: string | null;
+  rerank: "off" | "loading" | "ready" | "slow" | "error"; rerank_ms: number | null;
+}
 export type EventKind = "open" | "open_from_search" | "follow_link" | "search"
 export interface RenamePlan { from: string; to: string; affected: string[] }
 export interface Change { path: string; kind: "changed" | "removed" }
@@ -81,6 +84,7 @@ export const semanticEdges = (paths: string[] | null, topK = 3) =>
 export const embedStatus = () => invoke<EmbedStatus>("embed_status");
 export const typing = () => invoke<void>("typing");
 export const setModelDir = (dir: string | null) => invoke<void>("set_model_dir", { dir });
+export const setRerankerDir = (dir: string | null) => invoke<void>("set_reranker_dir", { dir });
 export const getConfig = () => invoke<AppConfig>("get_config");
 export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
 export const getWorkspace = () => invoke<Record<string, unknown>>("get_workspace");
