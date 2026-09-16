@@ -45,11 +45,19 @@ code. They are settled; the plan does not re-decide them.
   and the `hf-hub` feature are removed: nothing in the binary can open a
   connection, and the status bar's `loading` state now means reading from
   disk.
-- **Over budget means off, not slow.** A cross-encoder run cannot be
-  interrupted, so the budget is enforced by measurement: once on load with a
-  synthetic batch, then on every query. A run over budget switches
-  reranking off for the session and the status bar names the time. No query
-  ever waits on more than one over-budget run.
+- **The reranker reads the lead of a passage, and the batch bends before
+  reranking breaks.** Measured on the build machine (4 cores, AVX2, no
+  AVX-512), the cross-encoder's cost is linear in characters times pairs:
+  20 pairs of 1 200 characters take 3.9 s, 20 of 600 take 1.6 s, 10 of 600
+  take 0.5 s. So the reranker reads the first 600 characters of a passage
+  (`search::RERANK_CHARS`; a note's important part is at its beginning), and
+  a run over budget halves the batch rather than switching off. A
+  cross-encoder run cannot be interrupted, so the budget is enforced by
+  measurement: on load, a synthetic batch of `rerank_n` pairs is scored and
+  halved until it fits; on every query, a run over budget halves it again.
+  Under five pairs (`RERANK_MIN`) the reranker has too little to say, and
+  there reranking switches off for the session and the status bar names the
+  time. No query ever waits on more than one over-budget run.
 - **No network page.** Decided on the roadmap; this step does not write one.
 
 ## The Reranker seam
@@ -127,15 +135,18 @@ missing bundled folder is an error in the status, with the path it looked
 for, so a broken package says what is wrong rather than silently searching
 by full text alone.
 
-After the reranker loads, one synthetic batch of `rerank_n` passages of
-about `MAX_CHARS` characters is scored, which also warms ONNX Runtime. Over
-budget: the reranker is dropped and the status reads `slow` with the
-measured time. Under: it is installed behind a mutex like the embedder, and
-the `search` command passes it. After each search the command reads the
-timed wrapper; a run over budget drops the reranker and publishes `slow`.
+After the reranker loads, a small batch warms ONNX Runtime, then a
+synthetic batch of `rerank_n` leads of `RERANK_CHARS` characters is scored
+and halved until a run fits the budget. Under `RERANK_MIN` pairs the
+reranker is dropped and the status reads `slow` with the measured time.
+Otherwise it is installed behind a mutex like the embedder, the batch that
+fit is kept on the embed state, and the `search` command passes both. After
+each search the command reads the timed wrapper; a run over budget halves
+the batch, and under `RERANK_MIN` drops the reranker and publishes `slow`.
 
 `EmbedStatus` gains `rerank: "off" | "loading" | "ready" | "slow" |
-"error"` and `rerank_ms: Option<u64>`. `set_model_dir` gains a sibling
+"error"`, `rerank_ms: Option<u64>` and `rerank_n: Option<usize>`, the batch
+a search rescores now. `set_model_dir` gains a sibling
 `set_reranker_dir`; both restart the embed thread as today.
 
 ## The frontend
@@ -188,7 +199,9 @@ Added to `docs/smoke.md`; every line is a yes or the tag waits.
   first, and a query with nothing in the vault shows the divider with
   nothing above it.
 - Set `search.rerank_budget_ms` to `1` in `app.json` and search: results
-  still arrive, and the status bar reads `reranking off` with a time.
+  still arrive, and the status bar reads `reranking off` with a time. Set it
+  to a value the machine just misses at 20 pairs: the status's `rerank_n`
+  halves and reranking stays on.
 - Ctrl+Shift+K, the picker's first step lists the paraphrased note first.
 - Point *Embedding model folder* at a folder holding the fp32 model: the
   status shows `dir:<name>`, every passage re-embeds, and search still

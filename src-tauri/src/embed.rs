@@ -6,7 +6,7 @@ use engram_core::config::{EmbedConfig, SearchConfig};
 use engram_core::embed::fastembed::{EMBEDDER_ID, FastEmbedder, FastReranker, RERANKER_ID, dir_id};
 use engram_core::embed::{Embedder, Reranker, TimedReranker};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
@@ -22,6 +22,8 @@ pub struct EmbedStatus {
     pub rerank: &'static str,
     /// The last measured run, and the one that switched it off when `slow`.
     pub rerank_ms: Option<u64>,
+    /// How many hits a search rescores now: the setting, halved until it fits.
+    pub rerank_n: Option<usize>,
 }
 
 impl Default for EmbedStatus {
@@ -33,6 +35,7 @@ impl Default for EmbedStatus {
             error: None,
             rerank: "off",
             rerank_ms: None,
+            rerank_n: None,
         }
     }
 }
@@ -42,6 +45,9 @@ pub struct Embed {
     pub status: Mutex<EmbedStatus>,
     pub embedder: Mutex<Option<Box<dyn Embedder>>>,
     pub reranker: Mutex<Option<TimedReranker>>,
+    /// The batch the reranker is held to; the search command halves it when a
+    /// run goes over budget.
+    pub rerank_n: AtomicUsize,
     pub typing: Mutex<Option<Instant>>,
     stop: AtomicBool,
 }
@@ -87,10 +93,17 @@ fn model_folder(
     }
 }
 
-/// About one passage's worth of text, `n` times: what one search costs.
+/// Below this many pairs the cross-encoder has too little to say, so a
+/// machine that cannot fit them in the budget searches by fusion order.
+pub const RERANK_MIN: usize = 5;
+
+/// What the reranker reads of one hit, `n` times: what one search costs.
 fn warm_up_batch(n: usize) -> Vec<String> {
-    let text =
-        "the vault keeps a folder of markdown notes and an index that can be rebuilt ".repeat(16);
+    let text = "the vault keeps a folder of markdown notes and an index that can be rebuilt "
+        .repeat(16)
+        .chars()
+        .take(engram_core::search::RERANK_CHARS)
+        .collect::<String>();
     vec![text; n.max(1)]
 }
 
@@ -206,9 +219,10 @@ pub fn spawn(app: AppHandle, embed: Arc<Embed>, cfg: EmbedConfig, search: Search
     });
 }
 
-/// Loads the reranker and scores one search's worth of pairs. Over budget it
-/// is not installed: a run cannot be interrupted, so the budget is enforced
-/// by measurement and a slow machine searches by fusion order.
+/// Loads the reranker and scores one search's worth of pairs, halving the
+/// batch until a run fits the budget. A run cannot be interrupted, so the
+/// budget is enforced by measurement; under `RERANK_MIN` pairs the reranker
+/// is not installed and the machine searches by fusion order.
 fn load_reranker(
     app: &AppHandle,
     embed: &Embed,
@@ -233,25 +247,48 @@ fn load_reranker(
         }
     };
     let mut timed = TimedReranker::new(Box::new(loaded));
-    let n = search.rerank_n.max(1);
-    if let Err(e) = timed.score("a query about the notes", &warm_up_batch(n)) {
+    let mut n = search.rerank_n.max(RERANK_MIN);
+    // The first run also warms ONNX Runtime, so it is not the one measured.
+    if let Err(e) = timed.score("warm up", &warm_up_batch(RERANK_MIN)) {
         publish(app, embed, |s| {
             s.rerank = "error";
             s.error = Some(e.to_string());
         });
         return;
     }
-    let ms = timed.last().unwrap_or_default().as_millis() as u64;
-    if ms > search.rerank_budget_ms {
+    let ms = loop {
+        if timed
+            .score("a query about the notes", &warm_up_batch(n))
+            .is_err()
+        {
+            break None;
+        }
+        let ms = timed.last().unwrap_or_default().as_millis() as u64;
+        if ms <= search.rerank_budget_ms {
+            break Some(ms);
+        }
+        if n / 2 < RERANK_MIN {
+            publish(app, embed, |s| {
+                s.rerank = "slow";
+                s.rerank_ms = Some(ms);
+                s.rerank_n = None;
+            });
+            return;
+        }
+        n /= 2;
+    };
+    let Some(ms) = ms else {
         publish(app, embed, |s| {
-            s.rerank = "slow";
-            s.rerank_ms = Some(ms);
+            s.rerank = "error";
+            s.error = timed.last_error();
         });
         return;
-    }
+    };
+    embed.rerank_n.store(n, Ordering::Relaxed);
     *embed.reranker.lock().unwrap() = Some(timed);
     publish(app, embed, |s| {
         s.rerank = "ready";
         s.rerank_ms = Some(ms);
+        s.rerank_n = Some(n);
     });
 }

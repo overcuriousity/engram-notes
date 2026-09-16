@@ -36,7 +36,7 @@ class AppStateStore {
   folders = $state<string[]>([]);
   // The note a local graph centres on: the last one active in any pane.
   lastNote = $state<string | null>(null);
-  embed = $state<api.EmbedStatus>({ model: null, state: "off", pending: 0, error: null, rerank: "off", rerank_ms: null });
+  embed = $state<api.EmbedStatus>({ model: null, state: "off", pending: 0, error: null, rerank: "off", rerank_ms: null, rerank_n: null });
   // What the templates folder holds, read when the picker opens.
   templates = $state<string[]>([]);
   // Every snippet file; `config.css_snippets` says which are on.

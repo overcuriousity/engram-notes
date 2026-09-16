@@ -39,7 +39,7 @@ export interface Related { associated: Associated[]; similar: SimilarNote[]; sug
 export interface SemanticEdge { source: string; target: string; weight: number; kind: "assoc" | "similar" }
 export interface EmbedStatus {
   model: string | null; state: "off" | "loading" | "ready" | "error"; pending: number; error: string | null;
-  rerank: "off" | "loading" | "ready" | "slow" | "error"; rerank_ms: number | null;
+  rerank: "off" | "loading" | "ready" | "slow" | "error"; rerank_ms: number | null; rerank_n: number | null;
 }
 export type EventKind = "open" | "open_from_search" | "follow_link" | "search"
 export interface RenamePlan { from: string; to: string; affected: string[] }

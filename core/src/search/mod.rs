@@ -58,10 +58,21 @@ fn escape_html(s: &str) -> String {
 /// anything showing passage text shows a lead instead of the body.
 const LEAD_CHARS: usize = 200;
 
+/// What the cross-encoder reads of a passage. Its cost is linear in characters
+/// times pairs, and a note's important part is at its beginning: 20 pairs of
+/// this length are one search's budget on a modest CPU (`docs/memory.md`).
+pub const RERANK_CHARS: usize = 600;
+
 /// The first line's worth of `text`, flattened, cut on a word boundary.
 pub(crate) fn lead(text: &str) -> String {
+    head(text, LEAD_CHARS)
+}
+
+/// The first `chars` of `text`, flattened, cut on a word boundary with an
+/// ellipsis where something was cut.
+fn head(text: &str, chars: usize) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let Some((hard, _)) = flat.char_indices().nth(LEAD_CHARS) else {
+    let Some((hard, _)) = flat.char_indices().nth(chars) else {
         return flat;
     };
     let at = flat[..hard].rfind(' ').unwrap_or(hard);
@@ -194,10 +205,11 @@ fn rerank(
     }
     let mut texts = Vec::with_capacity(n);
     for h in &hits[..n] {
-        texts.push(match best.get(&h.path) {
+        let text = match best.get(&h.path) {
             Some(p) => p.text.clone(),
             None => index.passage_text(&h.path)?.unwrap_or_default(),
-        });
+        };
+        texts.push(head(&text, RERANK_CHARS));
     }
     let Ok(scores) = reranker.score(query, &texts) else {
         return Ok(());
@@ -461,6 +473,34 @@ mod tests {
         let out = plain(&ix, "water", Some(&mut broken));
         assert_eq!(out.hits.len(), 2);
         assert!(out.hits.iter().all(|h| h.rerank.is_none()));
+    }
+
+    #[test]
+    fn the_reranker_reads_the_lead_of_a_passage() {
+        struct Lengths(Vec<usize>);
+        impl crate::embed::Reranker for Lengths {
+            fn id(&self) -> String {
+                "lengths".into()
+            }
+            fn score(&mut self, _: &str, docs: &[String]) -> crate::Result<Vec<f32>> {
+                self.0 = docs.iter().map(|d| d.chars().count()).collect();
+                Ok(vec![0.5; docs.len()])
+            }
+        }
+        let d = tempfile::tempdir().unwrap();
+        fs::write(
+            d.path().join("Long.md"),
+            format!("# Long\n{}", "water ".repeat(300)),
+        )
+        .unwrap();
+        let v = Vault::open(d.path()).unwrap();
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild(&v).unwrap();
+        let mut seen = Lengths(vec![]);
+        let out = plain(&ix, "water", Some(&mut seen));
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(seen.0.len(), 1);
+        assert!(seen.0[0] <= RERANK_CHARS + 1, "{}", seen.0[0]);
     }
 
     #[test]

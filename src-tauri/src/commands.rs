@@ -382,7 +382,12 @@ pub fn search(
     // Reranker, then index: the embed thread never takes the reranker lock
     // while it holds the index, so there is no cycle.
     let mut reranker = embed.reranker.lock().unwrap();
+    let n = embed.rerank_n.load(std::sync::atomic::Ordering::Relaxed);
     let (out, budget_ms) = with_open(&state, |o| {
+        let search = engram_core::config::SearchConfig {
+            rerank_n: n,
+            ..o.config.search.clone()
+        };
         let out = engram_core::search::hybrid(
             &o.index,
             &query,
@@ -390,15 +395,16 @@ pub fn search(
             reranker
                 .as_mut()
                 .map(|r| r as &mut dyn engram_core::embed::Reranker),
-            &o.config.search,
+            &search,
             &o.config.memory,
             now(),
             limit.unwrap_or(50),
         )?;
         Ok((out, o.config.search.rerank_budget_ms))
     })?;
-    // A run over budget switches reranking off for the session; a failure is
-    // reported and the list stays in fusion order either way.
+    // A run over budget halves the batch, and under RERANK_MIN switches
+    // reranking off for the session; a failure is reported. The list stays in
+    // fusion order either way.
     if let Some(r) = reranker.as_ref() {
         let ms = r.last().map(|d| d.as_millis() as u64);
         if let Some(e) = r.last_error() {
@@ -406,13 +412,25 @@ pub fn search(
             crate::embed::publish(&app, &embed, |s| {
                 s.rerank = "error";
                 s.error = Some(e);
+                s.rerank_n = None;
             });
         } else if ms.is_some_and(|ms| ms > budget_ms) {
-            *reranker = None;
-            crate::embed::publish(&app, &embed, |s| {
-                s.rerank = "slow";
-                s.rerank_ms = ms;
-            });
+            if n / 2 < crate::embed::RERANK_MIN {
+                *reranker = None;
+                crate::embed::publish(&app, &embed, |s| {
+                    s.rerank = "slow";
+                    s.rerank_ms = ms;
+                    s.rerank_n = None;
+                });
+            } else {
+                embed
+                    .rerank_n
+                    .store(n / 2, std::sync::atomic::Ordering::Relaxed);
+                crate::embed::publish(&app, &embed, |s| {
+                    s.rerank_ms = ms;
+                    s.rerank_n = Some(n / 2);
+                });
+            }
         } else if let Some(ms) = ms {
             crate::embed::publish(&app, &embed, |s| s.rerank_ms = Some(ms));
         }
@@ -967,6 +985,7 @@ mod tests {
         assert_eq!(status["pending"], 0);
         assert_eq!(status["rerank"], "off");
         assert!(status["rerank_ms"].is_null());
+        assert!(status["rerank_n"].is_null());
         let rerank = json["hits"][0]["rerank"].as_f64().unwrap();
         assert!((rerank - 0.7).abs() < 1e-6, "{rerank}");
     }
