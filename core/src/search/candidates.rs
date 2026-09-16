@@ -43,10 +43,17 @@ fn rank(title: &str, path: &str, q: &str) -> u8 {
 
 /// Notes whose title, stem or path contains the query, then notes retrieval
 /// finds above the divider that spelling did not, up to `limit`.
+///
+/// A reranker is the passage picker's: it looks up a note once, deliberately,
+/// and waits for a better order. `[[` completion passes `None` -- it runs a
+/// keystroke at a time and the cross-encoder is too slow to sit there.
+// The same list `hybrid_hits` takes, and a struct would only rename it.
+#[allow(clippy::too_many_arguments)]
 pub fn link_candidates(
     index: &Index,
     query: &str,
     query_vec: Option<&[f32]>,
+    reranker: Option<&mut dyn crate::embed::Reranker>,
     cfg: &SearchConfig,
     mem: &MemoryConfig,
     at: i64,
@@ -75,7 +82,7 @@ pub fn link_candidates(
     // half: the vector scan runs over every note, once per keystroke.
     if !q.is_empty() && out.len() < limit {
         let seen: HashSet<String> = out.iter().map(|c| c.path.clone()).collect();
-        let found = super::hybrid_hits(index, query, query_vec, None, cfg, mem, at, limit)?;
+        let found = super::hybrid_hits(index, query, query_vec, reranker, cfg, mem, at, limit)?;
         out.extend(
             found
                 .into_iter()
@@ -135,6 +142,7 @@ mod tests {
             ix,
             q,
             Some(&v),
+            None,
             &SearchConfig::default(),
             &MemoryConfig::default(),
             0,
@@ -160,6 +168,53 @@ mod tests {
         assert_eq!(out[0].path, "Borrow.md");
         assert_eq!(out[0].kind, MatchKind::Text);
         assert_eq!(out.iter().filter(|c| c.path == "Borrow.md").count(), 1);
+    }
+
+    // Scores a passage by the first key it contains, so a test can name the
+    // order it wants without a model.
+    struct Table(Vec<(&'static str, f32)>);
+    impl crate::embed::Reranker for Table {
+        fn id(&self) -> String {
+            "table".into()
+        }
+        fn score(&mut self, _q: &str, docs: &[String]) -> crate::Result<Vec<f32>> {
+            Ok(docs
+                .iter()
+                .map(|d| {
+                    self.0
+                        .iter()
+                        .find(|(k, _)| d.contains(*k))
+                        .map_or(0.0, |(_, v)| *v)
+                })
+                .collect())
+        }
+    }
+
+    #[test]
+    fn the_picker_lists_the_meaning_half_in_the_rerankers_order() {
+        let (_d, ix, mut e) = ix();
+        let v = e.embed_query("ownership").unwrap();
+        let meaning = |r: &mut dyn crate::embed::Reranker| -> Vec<String> {
+            link_candidates(
+                &ix,
+                "ownership",
+                Some(&v),
+                Some(r),
+                &SearchConfig::default(),
+                &MemoryConfig::default(),
+                0,
+                10,
+            )
+            .unwrap()
+            .into_iter()
+            .filter(|c| c.kind == MatchKind::Meaning)
+            .map(|c| c.path)
+            .collect()
+        };
+        let mut borrow_first = Table(vec![("borrowing", 0.9), ("memory safe", 0.4)]);
+        assert_eq!(meaning(&mut borrow_first)[0], "Borrow.md");
+        let mut rust_first = Table(vec![("memory safe", 0.9), ("borrowing", 0.4)]);
+        assert_eq!(meaning(&mut rust_first)[0], "Rust.md");
     }
 
     #[test]
@@ -189,6 +244,7 @@ mod tests {
             &ix,
             "rust",
             None,
+            None,
             &SearchConfig::default(),
             &MemoryConfig::default(),
             0,
@@ -205,6 +261,7 @@ mod tests {
         let out = link_candidates(
             &ix,
             "kettle",
+            None,
             None,
             &SearchConfig::default(),
             &MemoryConfig::default(),

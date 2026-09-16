@@ -69,8 +69,9 @@ pub struct SearchConfig {
     pub cliff_min_share: f32,
     /// A cosine below this says nothing, so the hit is a stranger. e5's band is
     /// narrow — two notes with nothing in common still score about 0.76 — and
-    /// this is what tells a neighbour from one. Measured for
-    /// `multilingual-e5-small`; a different model needs a different number.
+    /// this is what tells a neighbour from one. Measured for fp32
+    /// `multilingual-e5-small`, and not re-measured for the int8 file now
+    /// bundled; a different model needs a different number.
     pub similarity_floor: f32,
     /// How many fused hits the cross-encoder rescores. Its cost is the
     /// dominant one in a search, so this is what the budget trades against.

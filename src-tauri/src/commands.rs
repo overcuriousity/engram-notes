@@ -402,68 +402,105 @@ pub fn search(
         )?;
         Ok((out, o.config.search.rerank_budget_ms))
     })?;
-    // A run over budget halves the batch, and under RERANK_MIN switches
-    // reranking off for the session; a failure is reported. The list stays in
-    // fusion order either way.
-    if let Some(r) = reranker.as_ref() {
-        let ms = r.last().map(|d| d.as_millis() as u64);
-        if let Some(e) = r.last_error() {
-            *reranker = None;
-            crate::embed::publish(&app, &embed, |s| {
-                s.rerank = "error";
-                s.error = Some(e);
-                s.rerank_n = None;
-            });
-        } else if ms.is_some_and(|ms| ms > budget_ms) {
-            if n / 2 < crate::embed::RERANK_MIN {
-                *reranker = None;
-                crate::embed::publish(&app, &embed, |s| {
-                    s.rerank = "slow";
-                    s.rerank_ms = ms;
-                    s.rerank_n = None;
-                });
-            } else {
-                embed
-                    .rerank_n
-                    .store(n / 2, std::sync::atomic::Ordering::Relaxed);
-                crate::embed::publish(&app, &embed, |s| {
-                    s.rerank_ms = ms;
-                    s.rerank_n = Some(n / 2);
-                });
-            }
-        } else if let Some(ms) = ms {
-            crate::embed::publish(&app, &embed, |s| s.rerank_ms = Some(ms));
-        }
-    }
+    hold_to_budget(&app, &embed, &mut reranker, n, budget_ms);
     Ok(out)
 }
 
+/// What one run costs the reranker. Over budget the batch halves, and under
+/// `RERANK_MIN` reranking goes off for the session; a failure is reported. The
+/// list stays in fusion order either way.
+///
+/// The readings are taken, not read: a search that matched nothing never
+/// reached the cross-encoder, and the run before it must not be measured twice
+/// -- two queries that find nothing would otherwise halve the batch away on
+/// one slow run.
+fn hold_to_budget(
+    app: &AppHandle,
+    embed: &std::sync::Arc<crate::embed::Embed>,
+    reranker: &mut Option<engram_core::embed::TimedReranker>,
+    n: usize,
+    budget_ms: u64,
+) {
+    let Some(r) = reranker.as_mut() else { return };
+    let ms = r.take_last().map(|d| d.as_millis() as u64);
+    if let Some(e) = r.take_last_error() {
+        *reranker = None;
+        crate::embed::publish_live(app, embed, |s| {
+            s.rerank = "error";
+            s.error = Some(e);
+            s.rerank_n = None;
+        });
+    } else if ms.is_some_and(|ms| ms > budget_ms) {
+        if n / 2 < crate::embed::RERANK_MIN {
+            *reranker = None;
+            crate::embed::publish_live(app, embed, |s| {
+                s.rerank = "slow";
+                s.rerank_ms = ms;
+                s.rerank_n = None;
+            });
+        } else {
+            embed
+                .rerank_n
+                .store(n / 2, std::sync::atomic::Ordering::Relaxed);
+            crate::embed::publish_live(app, embed, |s| {
+                s.rerank_ms = ms;
+                s.rerank_n = Some(n / 2);
+            });
+        }
+    } else if let Some(ms) = ms {
+        crate::embed::publish_live(app, embed, |s| s.rerank_ms = Some(ms));
+    }
+}
+
+/// `rerank` is the passage picker's: it asks once and waits for the better
+/// order. `[[` completion leaves it off -- it runs a keystroke at a time.
 #[tauri::command]
 pub fn link_candidates(
+    app: AppHandle,
     state: State<AppState>,
     query: String,
     limit: Option<usize>,
+    rerank: Option<bool>,
 ) -> CmdResult<Vec<LinkCandidate>> {
+    let embed = state.embed.lock().unwrap().clone();
     // One or two characters say nothing by meaning, and this runs a keystroke at
     // a time behind the embedder's lock; below that the spelling branch answers.
     let vector = if query.trim().chars().count() < 3 {
         None
     } else {
-        let embed = state.embed.lock().unwrap().clone();
         let mut guard = embed.embedder.lock().unwrap();
         guard.as_mut().and_then(|m| m.embed_query(&query).ok())
     };
-    with_open(&state, |o| {
-        Ok(engram_core::search::candidates::link_candidates(
+    // Reranker, then index, as in `search`: the one lock order there is.
+    let mut reranker = match rerank.unwrap_or(false) {
+        true => Some(embed.reranker.lock().unwrap()),
+        false => None,
+    };
+    let n = embed.rerank_n.load(std::sync::atomic::Ordering::Relaxed);
+    let (out, budget_ms) = with_open(&state, |o| {
+        let search = engram_core::config::SearchConfig {
+            rerank_n: n,
+            ..o.config.search.clone()
+        };
+        let out = engram_core::search::candidates::link_candidates(
             &o.index,
             &query,
             vector.as_deref(),
-            &o.config.search,
+            reranker
+                .as_mut()
+                .and_then(|g| g.as_mut())
+                .map(|r| r as &mut dyn engram_core::embed::Reranker),
+            &search,
             &o.config.memory,
             now(),
             limit.unwrap_or(20),
-        )?)
-    })
+        )?;
+        Ok((out, o.config.search.rerank_budget_ms))
+    })?;
+    if let Some(guard) = reranker.as_mut() {
+        hold_to_budget(&app, &embed, guard, n, budget_ms);
+    }
+    Ok(out)
 }
 
 #[tauri::command]

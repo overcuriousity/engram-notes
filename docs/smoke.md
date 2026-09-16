@@ -147,3 +147,6 @@ Run on a real vault before tagging a release. Every line is a yes or the tag wai
 81. Two notes with nothing in common still sit under the divider: the 0.83
     similarity floor holds for the int8 embedder, or the number that does is
     recorded in `docs/memory.md`.
+82. A common word in a vault of more than twenty matching notes: the results
+    past the twentieth, which the reranker never reached, are not all drawn
+    under the divider.

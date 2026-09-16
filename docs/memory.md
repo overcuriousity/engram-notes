@@ -11,8 +11,9 @@ passage vector) each fetch `limit × 3` candidates. Reciprocal rank fusion with
 snippet. For a deliberate search (Ctrl+K, the search pane) and the passage
 picker, a cross-encoder then rescores the top `rerank_n` (20) fused entries
 against the query and puts them in its order; the rest keep fusion order
-beneath. The divider reads the rerank score, with `rerank_floor` (0.1), where
-reranking ran, and the cosine with `similarity_floor` otherwise. `[[`
+beneath. The divider reads each hit by the score it has: the rerank score
+against `rerank_floor` (0.1) for the entries that were rescored, the cosine
+against `similarity_floor` for the tail the cross-encoder never reached. `[[`
 completion never reranks: it answers keystrokes. With no model loaded the
 full-text branch answers alone, which is why search works while the models
 load.
@@ -27,8 +28,9 @@ the build machine (4 cores, AVX2, no AVX-512): 20 pairs of 1 200 characters
 3.9 s, 20 of 600 1.6 s, 10 of 600 0.5 s. So the reranker reads the first 600
 characters of a passage, and the 500 ms budget (`rerank_budget_ms`) is
 enforced by measurement, since a run cannot be interrupted: on load a
-synthetic batch of `rerank_n` leads is scored and halved until a run fits;
-on every query a run over budget halves it again. Under five pairs
+synthetic batch of `rerank_n` leads is scored and halved until a run fits,
+on a thread of its own so the passage queue is not held up; on every query a
+run over budget halves it again, each run measured once. Under five pairs
 reranking switches off for the session and the status bar names the time.
 `rerank_n` in the status is the batch a search rescores now.
 

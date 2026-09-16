@@ -71,12 +71,14 @@ impl TimedReranker {
         }
     }
 
-    pub fn last(&self) -> Option<std::time::Duration> {
-        self.last
+    /// The last run, taken: a search that scored nothing leaves no reading,
+    /// and the budget must not halve twice on one measurement.
+    pub fn take_last(&mut self) -> Option<std::time::Duration> {
+        self.last.take()
     }
 
-    pub fn last_error(&self) -> Option<String> {
-        self.last_error.clone()
+    pub fn take_last_error(&mut self) -> Option<String> {
+        self.last_error.take()
     }
 }
 
@@ -226,12 +228,15 @@ mod tests {
     #[test]
     fn the_timed_wrapper_records_the_last_run() {
         let mut t = TimedReranker::new(Box::new(FakeReranker));
-        assert!(t.last().is_none());
+        assert!(t.take_last().is_none());
         assert_eq!(t.id(), "fake-reranker");
         let s = t.score("a", &["a b".to_string()]).unwrap();
         assert_eq!(s, vec![1.0]);
-        assert!(t.last().is_some());
-        assert!(t.last_error().is_none());
+        assert!(t.take_last().is_some());
+        // Taken: a run is measured once, and a search that scores nothing must
+        // not read the run before it.
+        assert!(t.take_last().is_none());
+        assert!(t.take_last_error().is_none());
     }
 
     #[test]
@@ -248,7 +253,7 @@ mod tests {
         let mut t = TimedReranker::new(Box::new(Broken));
         assert!(t.score("a", &["b".to_string()]).is_err());
         assert_eq!(
-            t.last_error().as_deref(),
+            t.take_last_error().as_deref(),
             Some(crate::Error::Embed("no".into()).to_string().as_str())
         );
     }

@@ -104,7 +104,9 @@ export const anchorLine = (path: string, fragment: string) => invoke<number | nu
 export interface LinkCandidate { path: string; title: string; kind: "text" | "meaning"; primed: boolean }
 export interface Block { kind: "heading" | "list" | "paragraph"; first: number; last: number; text: string; heading: string | null }
 export interface Preview { heading: string; text: string }
-export const linkCandidates = (query: string, limit = 20) => invoke<LinkCandidate[]>("link_candidates", { query, limit });
+// `rerank` is the passage picker's: one deliberate lookup that waits for the
+// better order. `[[` completion asks a keystroke at a time and leaves it off.
+export const linkCandidates = (query: string, limit = 20, rerank = false) => invoke<LinkCandidate[]>("link_candidates", { query, limit, rerank });
 export const blocks = (path: string) => invoke<Block[]>("blocks", { path });
 export const anchorBlock = (path: string, first: number, last: number) => invoke<string>("anchor_block", { path, first, last });
 export const linkPreview = (path: string, fragment: string | null) => invoke<Preview | null>("link_preview", { path, fragment });

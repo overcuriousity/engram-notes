@@ -23,7 +23,7 @@
     clearTimeout(timer);
     timer = setTimeout(async () => {
       try {
-        const got = await linkCandidates(query);
+        const got = await linkCandidates(query, 20, true);
         if (mine !== gen) return;
         notes = got;
       } catch (e) {

@@ -75,6 +75,21 @@ pub(crate) fn publish(app: &AppHandle, embed: &Embed, f: impl FnOnce(&mut EmbedS
     let _ = app.emit("embed-status", status);
 }
 
+/// Publishes only while `embed` is still the live one. A search holds the
+/// `Embed` it started with, and picking a new model folder meanwhile swaps in
+/// another whose thread publishes `loading`: the finishing search would put the
+/// old model back as `ready` for the length of the load.
+pub(crate) fn publish_live(app: &AppHandle, embed: &Arc<Embed>, f: impl FnOnce(&mut EmbedStatus)) {
+    let live = {
+        let state = app.state::<AppState>();
+        let slot = state.embed.lock().unwrap();
+        Arc::ptr_eq(&slot, embed)
+    };
+    if live {
+        publish(app, embed, f);
+    }
+}
+
 /// The folder a model loads from and the id it gets: an override folder is
 /// named after itself, the bundled one after the model.
 fn model_folder(
@@ -166,7 +181,14 @@ pub fn spawn(app: AppHandle, embed: Arc<Embed>, cfg: EmbedConfig, search: Search
             s.model = Some(id);
         });
 
-        load_reranker(&app, &embed, &cfg, &search, &resources);
+        // On a thread of its own: loading the cross-encoder and measuring it
+        // against the budget is seconds of work on a slow machine, and the
+        // queue is at its longest the moment a vault opens.
+        std::thread::spawn({
+            let (app, embed) = (app.clone(), Arc::clone(&embed));
+            let (cfg, search, resources) = (cfg.clone(), search.clone(), resources.clone());
+            move || load_reranker(&app, &embed, &cfg, &search, &resources)
+        });
 
         let batch = cfg.batch.max(1);
         while !embed.stop.load(Ordering::Relaxed) {
@@ -263,7 +285,9 @@ fn load_reranker(
         {
             break None;
         }
-        let ms = timed.last().unwrap_or_default().as_millis() as u64;
+        // Taken, so the calibration's reading is not left behind for the
+        // first search to mistake for its own.
+        let ms = timed.take_last().unwrap_or_default().as_millis() as u64;
         if ms <= search.rerank_budget_ms {
             break Some(ms);
         }
@@ -280,10 +304,15 @@ fn load_reranker(
     let Some(ms) = ms else {
         publish(app, embed, |s| {
             s.rerank = "error";
-            s.error = timed.last_error();
+            s.error = timed.take_last_error();
         });
         return;
     };
+    // The vault can close while the measuring runs; nothing is installed into
+    // an `Embed` whose thread has been told to stop.
+    if embed.stop.load(Ordering::Relaxed) {
+        return;
+    }
     embed.rerank_n.store(n, Ordering::Relaxed);
     *embed.reranker.lock().unwrap() = Some(timed);
     publish(app, embed, |s| {

@@ -67,11 +67,15 @@ pub fn cliff(scores: &[f32], factor: f32, min_share: f32) -> Option<usize> {
 /// both branches found sits above one only the dense branch ranked higher --
 /// and reading it position by position would cut the good hits below that
 /// one away.
+///
+/// Reranking scores the head of the list and not the rest, so the two readings
+/// meet here: the cliff is read over one scale, whichever one the search used,
+/// while the floor asks each hit for the score it actually has.
 pub fn mark_past_divider(hits: &mut [Hit], cfg: &SearchConfig) {
     let reranked = hits.iter().any(|h| h.rerank.is_some());
-    let (read, floor): (fn(&Hit) -> Option<f32>, f32) = match reranked {
-        true => (|h| h.rerank, cfg.rerank_floor),
-        false => (|h| h.similarity, cfg.similarity_floor),
+    let read: fn(&Hit) -> Option<f32> = match reranked {
+        true => |h| h.rerank,
+        false => |h| h.similarity,
     };
     let mut sorted: Vec<f32> = hits.iter().filter_map(read).collect();
     if sorted.is_empty() {
@@ -83,11 +87,24 @@ pub fn mark_past_divider(hits: &mut [Hit], cfg: &SearchConfig) {
     // be the best one here and still mean nothing.
     let by_cliff = cliff(&sorted, cfg.cliff_factor, cfg.cliff_min_share)
         .map(|above| tail_from(hits, read, sorted[above - 1]));
-    let by_floor = tail_from(hits, read, floor);
+    let by_floor = floor_tail(hits, cfg);
     let from = by_cliff.unwrap_or(0).max(by_floor);
     for h in hits.iter_mut().skip(from) {
         h.past_divider = true;
     }
+}
+
+// The place after the last hit that reaches the floor of its own scale. Only
+// the first `rerank_n` hits are rescored, so most of a long list holds nothing
+// but a cosine: read for a rerank score it never had, every one of them would
+// fall, however close it is.
+fn floor_tail(hits: &[Hit], cfg: &SearchConfig) -> usize {
+    hits.iter()
+        .rposition(|h| match h.rerank {
+            Some(s) => s >= cfg.rerank_floor,
+            None => h.similarity.is_some_and(|s| s >= cfg.similarity_floor),
+        })
+        .map_or(0, |i| i + 1)
 }
 
 // The place after the last hit that still reaches `cut`, so what is marked is
@@ -241,5 +258,31 @@ mod tests {
         mark_past_divider(&mut hits, &SearchConfig::default());
         assert!(!hits[0].past_divider && !hits[1].past_divider);
         assert!(hits[2].past_divider, "0.02 is under rerank_floor 0.1");
+    }
+
+    #[test]
+    fn a_hit_the_reranker_never_reached_is_read_by_its_cosine() {
+        // What a default search does: `limit` 50, `rerank_n` 20, so the tail
+        // holds a cosine and no rerank score. Read against the rerank floor it
+        // would fall whole; each hit is read against its own floor instead.
+        let mut hits: Vec<Hit> = (0..6).map(|i| hit(&format!("{i}.md"), None)).collect();
+        for (i, h) in hits.iter_mut().enumerate() {
+            match i < 3 {
+                true => h.rerank = Some(0.9 - i as f32 * 0.01),
+                false => h.similarity = Some(0.9 - i as f32 * 0.01),
+            }
+        }
+        mark_past_divider(&mut hits, &SearchConfig::default());
+        assert!(
+            hits.iter().all(|h| !h.past_divider),
+            "0.87 is over similarity_floor, scored or not"
+        );
+
+        // ...and the tail still falls on its own floor when it earns it.
+        hits[5].similarity = Some(0.10);
+        hits[5].past_divider = false;
+        mark_past_divider(&mut hits, &SearchConfig::default());
+        assert!(hits[5].past_divider);
+        assert!(!hits[4].past_divider);
     }
 }

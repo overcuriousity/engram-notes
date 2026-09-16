@@ -59,7 +59,10 @@ impl FastEmbedder {
             external_initializers: Default::default(),
             tokenizer_files: tokenizer_files(dir)?,
             pooling: Some(Pooling::Mean),
-            quantization: QuantizationMode::None,
+            // The bundled file is `model_int8.onnx`, dynamically quantised: the
+            // data range is fit to each batch, so vectors from two batches are
+            // not comparable. Declaring it holds every call to one batch.
+            quantization: QuantizationMode::Dynamic,
             output_key: None,
         };
         Ok(FastEmbedder {
